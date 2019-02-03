@@ -1,0 +1,6 @@
+.vscode/
+/testing/venv/
+*.pyc
+__pycache__
+*.bak
+*.retry
