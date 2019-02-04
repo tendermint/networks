@@ -1,5 +1,7 @@
 .vscode/
 /testing/venv/
+/testing/experiments/**/*-clients-*/
+/testing/experiments/**/collection.log
 *.pyc
 __pycache__
 *.bak
