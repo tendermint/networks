@@ -14,6 +14,9 @@ MIN_WAIT = int(os.environ.get('MIN_WAIT', 100))
 MAX_WAIT = int(os.environ.get('MAX_WAIT', 500))
 
 
+# TODO: Build a better HTTP client here with better error handling.
+
+
 class KVStoreBalancedRWTaskSequence(TaskSequence):
     """A balanced read/write task set for interacting with the nodes."""
 
