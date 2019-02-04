@@ -83,6 +83,7 @@
       shell: |
         INVENTORY_HOSTNAME={{ inventory_hostname }} \
           TARGET_HOSTS={{ target_hosts_str }} \
+          TARGET_HOSTS_PROTO={{ target_hosts_proto }} \
           CSV_OUTPUT_FILE={{ csv_output_file }} \
           NUM_CLIENTS={{ num_clients }} \
           HATCH_RATE={{ hatch_rate }} \
