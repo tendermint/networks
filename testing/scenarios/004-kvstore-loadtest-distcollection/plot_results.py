@@ -132,7 +132,6 @@ def plot_response_times(results):
     plt.scatter(num_clients, avg_rt, marker='>', color='#00dd00', label='average')
     plt.scatter(num_clients, max_rt, marker='^', color='#aa0000', label='max')
 
-    plt.yticks(np.arange(0, max(max_rt), step=200))
     plt.ylabel('Response time (ms)')
     plt.title('Response times by number of clients')
     plt.xlabel('Number of clients')
@@ -158,14 +157,12 @@ def plot_request_rate(results):
     ax1.set_xlabel('Number of clients')
     ax1.set_ylabel('Requests/sec')
     ax1.plot(num_clients, reqs_per_sec, color='#0000aa', marker='o', label='requests/sec')
-    ax1.set_yticks(np.arange(0, max(reqs_per_sec), step=200))
     ax1.tick_params(axis='y', labelcolor='#0000aa')
 
     ax2 = ax1.twinx()
 
     ax2.set_ylabel('Request failure rate (%)')
     ax2.plot(num_clients, failures, marker='v', color='#aa0000', label='failure %')
-    ax2.set_yticks(np.arange(0, 0.5, step=0.05))
     ax2.tick_params(axis='y', labelcolor='#aa0000')
 
     plt.title('Request and failure rate by number of clients')
