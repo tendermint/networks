@@ -7,6 +7,8 @@ This folder contains experimental results using the following parameters.
 | Tendermint version | v0.28.0 |
 | Proxy app | `kvstore` |
 | Network configuration | `002-no-empty-blocks-issue` |
+| Protocol | HTTP |
+| RPCs used | `broadcast_tx_sync`, `abci_query` |
 | Starting clients | 100 |
 | Ending clients | 3000 |
 | Execution time | 10 mins per load |
