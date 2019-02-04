@@ -2,6 +2,7 @@
 set -e
 
 TARGET_HOSTS=${TARGET_HOSTS:-"http://tik0.sredev.co:26657"}
+TARGET_HOSTS_PROTO=${TARGET_HOSTS_PROTO:-"http"}
 CSV_OUTPUT_FILE=${CSV_OUTPUT_FILE:-"./loadtest"}
 NUM_CLIENTS=${NUM_CLIENTS:-"1000"}
 HATCH_RATE=${HATCH_RATE:-"20"}
@@ -19,7 +20,7 @@ source venv/bin/activate
 
 if [ "${INVENTORY_HOSTNAME}" == "${LOADTEST_MASTER_NODE}" ]; then
     HOST_URLS=${TARGET_HOSTS} \
-        locust -f locust_file.py \
+        locust -f locust_file_${TARGET_HOSTS_PROTO}.py \
         --no-web \
         --master \
         --master-bind-host 0.0.0.0 \
@@ -29,7 +30,7 @@ if [ "${INVENTORY_HOSTNAME}" == "${LOADTEST_MASTER_NODE}" ]; then
         ${LOCUST_PARAMS} > ${STDOUT_FILE} 2>&1
 else
     HOST_URLS=${TARGET_HOSTS} \
-        locust -f locust_file.py \
+        locust -f locust_file_${TARGET_HOSTS_PROTO}.py \
         --no-web \
         --slave \
         --master-host ${LOADTEST_MASTER_HOSTNAME} \

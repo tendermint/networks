@@ -1,4 +1,5 @@
 INVENTORY?=../../inventory/hosts
+TARGET_HOSTS_PROTO?=http
 NUM_CLIENTS?=1000
 HATCH_RATE?=20
 RUN_TIME?=60s
@@ -11,6 +12,7 @@ execute:
 	mkdir -p $(RESULTS_OUTPUT_DIR)
 	rm -rf $(RESULTS_OUTPUT_DIR)/*
 	ansible-playbook -i $(INVENTORY) \
+		-e "{\"target_hosts_proto\":\"${TARGET_HOSTS_PROTO}}\"" \
 		-e "{\"num_clients\":${NUM_CLIENTS}}" \
 		-e "{\"hatch_rate\":${HATCH_RATE}}" \
 		-e "{\"run_time\":${RUN_TIME}}" \

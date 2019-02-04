@@ -20,10 +20,11 @@
 
     # Locust configuration parameters
     target_hosts:
-      - "http://tik0.sredev.co:26657"
-      - "http://tik1.sredev.co:26657"
-      - "http://tik2.sredev.co:26657"
-      - "http://tik3.sredev.co:26657"
+      - "tik0.sredev.co:26657"
+      - "tik1.sredev.co:26657"
+      - "tik2.sredev.co:26657"
+      - "tik3.sredev.co:26657"
+    target_hosts_proto: http
     target_hosts_str: "{{ target_hosts | join('::') }}"
     csv_output_file: "{{ loadtest_home }}/loadtest"
     num_clients: 1000
@@ -53,7 +54,8 @@
     - name: Copy the necessary scripts across
       copy: "src={{ item }} dest={{ loadtest_home }}"
       with_items:
-        - "locust_file.py"
+        - "locust_file_http.py"
+        - "locust_file_websockets.py"
         - "execute_load_test.sh"
       when: (not fast_mode)
     - name: Configure the permissions for the loadtest user home folder

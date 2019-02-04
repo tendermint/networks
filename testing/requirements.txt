@@ -3,3 +3,4 @@ pip
 requests
 locustio
 matplotlib
+websocket-client

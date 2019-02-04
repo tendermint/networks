@@ -60,17 +60,17 @@ def make_node_locust_class(host_url, node_id):
 
 
 DEFAULT_HOSTS = [
-    'http://tik0.sredev.co:26657',
-    'http://tik1.sredev.co:26657',
-    'http://tik2.sredev.co:26657',
-    'http://tik3.sredev.co:26657',
+    'tik0.sredev.co:26657',
+    'tik1.sredev.co:26657',
+    'tik2.sredev.co:26657',
+    'tik3.sredev.co:26657',
 ]
 
 # Parse the nodes we want to attack from the environment
 HOST_URLS = os.environ.get('HOST_URLS', '::'.join(DEFAULT_HOSTS)).split('::')
 
 for i in range(len(HOST_URLS)):
-    node_cls = make_node_locust_class(HOST_URLS[i], i)
+    node_cls = make_node_locust_class('http://%s' % HOST_URLS[i], i)
     # Inject the class into global space, so it will be picked up by Locust
     globals()[node_cls.__name__] = node_cls
     print("Created class %s" % node_cls.__name__)
