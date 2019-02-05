@@ -53,6 +53,8 @@ class WebSocketsKVStoreClient(object):
                 if result_value_decoded != expected:
                     events.request_failure.fire(request_type='ws', name=rpc_obj['method'], response_time=total_time, exception=Exception("Response value mismatch"))
                     return result
+            elif result_value is not None:
+                events.request_failure.fire(request_type="ws", name=rpc_obj['method'], response_time=total_time, exception=Exception("Unexpected response format from server"))
             events.request_success.fire(request_type="ws", name=rpc_obj['method'], response_time=total_time, response_length=len(result))
         return result
 
