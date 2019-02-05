@@ -56,9 +56,9 @@ can supply via environment variables. See each network's folder for details.
 
 The following test network configurations are available for deployment:
 
-* [`001-reference`](./001-reference/README.md) - A simple reference Tendermint
+* [`001-reference`](./networks/001-reference/README.md) - A simple reference Tendermint
   network, running `kvstore` with `create_empty_blocks=true`.
-* [`002-no-empty-blocks-issue`](./002-no-empty-blocks-issue/README.md) - A
+* [`002-no-empty-blocks-issue`](./networks/002-no-empty-blocks-issue/README.md) - A
   network with a variety of configuration changes based on a series of issues we
   were seeing resulting in the Tendermint network halting. This network allows
   us to test for similar issues as experienced by the relevant users.
@@ -75,16 +75,16 @@ your Tendermint network.
 
 The following testing scenarios are currently provided:
 
-* [`001-kvstore-test`](./001-kvstore-test/README.md) - Simple `kvstore` test,
+* [`001-kvstore-test`](./scenarios/001-kvstore-test/README.md) - Simple `kvstore` test,
   which stores a random value in a particular node and attempts to read it back
   out.
-* [`002-kvstore-loadtest`](./002-kvstore-loadtest/README.md) - A load test using
+* [`002-kvstore-loadtest`](./scenarios/002-kvstore-loadtest/README.md) - A load test using
   [Locust](https://locust.io) to be executed from a single machine. The
   assumption here is that the target Tendermint network runs `kvstore` as its
   proxy app.
-* [`003-kvstore-loadtest-distributed`](./003-kvstore-loadtest-distributed/README.md)
+* [`003-kvstore-loadtest-distributed`](./scenarios/003-kvstore-loadtest-distributed/README.md)
   - A distributed load test (multiple source machines) using Locust.
-* [`004-kvstore-loadtest-distcollection`](./004-kvstore-loadtest-distcollection/README.md)
+* [`004-kvstore-loadtest-distcollection`](./scenarios/004-kvstore-loadtest-distcollection/README.md)
   - Runs a suite/collection of distributed load tests (i.e.
     `003-kvstore-loadtest-distributed`) with varying parameters (number of
     clients, hatch rate, run time, etc.).
