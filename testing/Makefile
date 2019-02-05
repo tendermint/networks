@@ -1,7 +1,8 @@
 GOPATH?=$(shell go env GOPATH)
 # NOTE: INVENTORY variable *must* be absolute path
-INVENTORY?=$(GOPATH)/src/github.com/tendermint/tendermint/test/remote/inventory/hosts
+INVENTORY?=inventory/hosts
 LOGS_DIR?=/tmp
+.PHONY: distribute-pubkey distribute-known_hosts
 
 include common/make/python-ansible.mk
 
@@ -30,3 +31,19 @@ scenario\:%: venv/bin/ansible
 plot-results\:%: venv
 	@$(ACTIVATE_VENV); \
 	$(MAKE) -C scenarios/$*/ plot-results
+
+PUBLIC_KEY_PATH?=/tmp/pubkey.pub
+PUBLIC_KEY_STATE?=present
+distribute-pubkey:
+	@$(ACTIVATE_VENV); \
+	ansible-playbook -i $(INVENTORY) \
+		-e "{\"public_key_path\": \"${PUBLIC_KEY_PATH}\"}" \
+		-e "{\"public_key_state\": \"${PUBLIC_KEY_STATE}\"}" \
+		utils/distribute-pubkey.yml
+
+KNOWN_HOSTS_PATH?=/tmp/known_hosts
+distribute-known_hosts:
+	@$(ACTIVATE_VENV); \
+	ansible-playbook -i $(INVENTORY) \
+		-e "{\"known_hosts_path\": \"${KNOWN_HOSTS_PATH}\"}" \
+		utils/distribute-known_hosts.yml
