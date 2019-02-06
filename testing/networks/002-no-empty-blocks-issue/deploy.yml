@@ -7,13 +7,14 @@
     delete_logs: yes
     fast_mode: no
   tasks:
-    - name: Check if Toxiproxy service is present
-      stat: path=/etc/systemd/system/toxiproxy.service
-      register: tp_service
-      when: not fast_mode
-    - name: Stop and disable Toxiproxy if present
-      service: name=toxiproxy state=stopped enabled=no
-      when: not fast_mode and tp_service.stat.exists
+    - name: Check if outage simulator server service is present
+      stat: path=/etc/systemd/system/outage-sim-server.service
+      register: outage_sim_server
+    - name: Install outage simulator service if not present
+      include_tasks: ../../common/ansible/install-outage-sim-svc.yml
+      when: not fast_mode and (always_deploy_svc or not outage_sim_server.stat.exists)
+    - name: Ensure outage simulator is up and ready
+      service: name=outage-sim-server state=restarted
 
     # Check if we need to configure the systemd service
     - name: Check if Tendermint service is present

@@ -19,6 +19,7 @@ execute:
 		-e "{\"run_timeout\":${RUN_TIMEOUT}}" \
 		-e "{\"fast_mode\":${FAST_MODE}}" \
 		-e "{\"results_output_dir\":\"${RESULTS_OUTPUT_DIR}\"}" \
+		-e "{\"outage_sim\":\"${OUTAGE_SIM}\"}" \
 		deploy.yml
 
 # Command to help to just fetch the logs again

@@ -12,6 +12,9 @@ LOG_FILE=${LOG_FILE:-"./loadtest.log"}
 STDOUT_FILE=${STDOUT_FILE:-"loadtest.stdout.log"}
 LOADTEST_MASTER_NODE=${LOADTEST_MASTER_NODE:-"tok0"}
 LOADTEST_MASTER_HOSTNAME=${LOADTEST_MASTER_HOSTNAME:-"tok0.sredev.co"}
+OUTAGE_SIM=${OUTAGE_SIM:-""}
+OUTAGE_SIM_LOG=${OUTAGE_SIM_LOG:-"outage-sim.log"}
+OUTAGE_SIM_PID=0
 
 # Parameters common to both master and slaves
 LOCUST_PARAMS="--csv ${CSV_OUTPUT_FILE} -c ${NUM_CLIENTS} -r ${HATCH_RATE} --logfile ${LOG_FILE}"
@@ -19,6 +22,12 @@ LOCUST_PARAMS="--csv ${CSV_OUTPUT_FILE} -c ${NUM_CLIENTS} -r ${HATCH_RATE} --log
 source venv/bin/activate
 
 if [ "${INVENTORY_HOSTNAME}" == "${LOADTEST_MASTER_NODE}" ]; then
+    # We want to run the outage simulator script from the master node
+    if [[ $OUTAGE_SIM ]]; then
+        ./outage_sim_client.py > ${OUTAGE_SIM_LOG} 2>&1 &
+        OUTAGE_SIM_PID=$!
+    fi
+
     HOST_URLS=${TARGET_HOSTS} \
         locust -f locust_file_${TARGET_HOSTS_PROTO}.py \
         --no-web \
@@ -28,6 +37,12 @@ if [ "${INVENTORY_HOSTNAME}" == "${LOADTEST_MASTER_NODE}" ]; then
         --expect-slaves ${EXPECTED_SLAVE_COUNT} \
         -t ${RUN_TIME} \
         ${LOCUST_PARAMS} > ${STDOUT_FILE} 2>&1
+
+    if [[ $OUTAGE_SIM ]]; then
+        if ps -p ${OUTAGE_SIM_PID} > /dev/null; then
+            kill ${OUTAGE_SIM_PID}
+        fi
+    fi
 else
     HOST_URLS=${TARGET_HOSTS} \
         locust -f locust_file_${TARGET_HOSTS_PROTO}.py \

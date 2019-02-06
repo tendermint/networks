@@ -33,6 +33,9 @@
     run_timeout: 330 # In seconds - must be longer than run_time.
     log_file: "{{ loadtest_home }}/loadtest.log"
     stdout_file: "{{ loadtest_home }}/loadtest.stdout.log"
+
+    # Outage simulation
+    outage_sim: ""
   tasks:
     - name: Check if Tendermint service is present
       stat: "path=/etc/systemd/system/tendermint.service"
@@ -57,6 +60,7 @@
         - "locust_file_http.py"
         - "locust_file_websockets.py"
         - "execute_load_test.sh"
+        - "outage_sim_client.py"
       when: (not fast_mode)
     - name: Configure the permissions for the loadtest user home folder
       file:
@@ -64,10 +68,13 @@
         owner: "{{ loadtest_user }}"
         group: "{{ loadtest_group }}"
       when: (not fast_mode)
-    - name: Configure executable permissions for load test execution script
+    - name: Configure executable permissions for scripts
       file:
-        path: "{{ loadtest_home }}/execute_load_test.sh"
+        path: "{{ loadtest_home }}/{{ item }}"
         mode: 0755
+      with_items:
+        - execute_load_test.sh
+        - outage_sim_client.py
       when: (not fast_mode)
     - name: Clear out existing log/statistics files, if they exist
       file:
@@ -93,6 +100,7 @@
           EXPECTED_SLAVE_COUNT={{ expected_slave_count }} \
           LOADTEST_MASTER_NODE={{ loadtest_master_node }} \
           LOADTEST_MASTER_HOSTNAME={{ loadtest_master_hostname }} \
+          OUTAGE_SIM="{{ outage_sim }}" \
           ./execute_load_test.sh
       args:
         chdir: "{{ loadtest_home }}"
