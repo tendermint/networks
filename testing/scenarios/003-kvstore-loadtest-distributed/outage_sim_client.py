@@ -16,7 +16,7 @@ class SimulationInstruction:
     
     def execute(self):
         print("Bringing %s %s" % (self.host, self.cmd))
-        r = requests.post('http://%s:34000', data=self.cmd)
+        r = requests.post('http://%s:34000' % self.host, data=self.cmd)
         if r.status_code >= 400:
             print("FAILED: Response code %d" % r.status_code)
         else:
