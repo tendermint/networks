@@ -5,7 +5,7 @@ FAST_MODE?=false
 
 include ../../common/make/tendermint.mk
 
-deploy: $(TMBIN)
+deploy: $(TMBIN) ../../common/apps/outage-sim-server/outage-sim-server
 	rm -rf /tmp/nodes/
 	tendermint testnet \
 		--v 4 \
@@ -24,3 +24,10 @@ fetch-tm-logs:
 
 status:
 	@SLEEP=0 ./check-status.sh
+
+# Builds our outage simulator server for Linux
+../../common/apps/outage-sim-server/outage-sim-server:
+	GOOS=linux GOARCH=amd64 go build \
+		-o ../../common/apps/outage-sim-server/outage-sim-server \
+		../../common/apps/outage-sim-server/outage_sim_server.go
+
