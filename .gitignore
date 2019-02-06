@@ -2,6 +2,7 @@
 /testing/venv/
 /testing/experiments/**/*-clients-*/
 /testing/experiments/**/collection.log
+/testing/common/apps/outage-sim-server/outage-sim-server
 *.pyc
 __pycache__
 *.bak

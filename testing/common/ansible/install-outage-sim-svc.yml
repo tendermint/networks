@@ -1,0 +1,17 @@
+# -------------------------------------------
+# Installs Tendermint outage simulator server
+# -------------------------------------------
+- name: Copy binary to nodes
+  copy:
+    src: ../apps/outage-sim-server/outage-sim-server
+    dest: /usr/bin/outage-sim-server
+    owner: root
+    group: root
+    mode: 0755
+- name: Copy service definition to nodes
+  copy:
+    src: config/outage-sim-server.service
+    dest: /etc/systemd/system/outage-sim-server.service
+- name: Reload systemd services
+  systemd:
+    daemon_reload: yes

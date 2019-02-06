@@ -24,7 +24,7 @@ source venv/bin/activate
 if [ "${INVENTORY_HOSTNAME}" == "${LOADTEST_MASTER_NODE}" ]; then
     # We want to run the outage simulator script from the master node
     if [[ $OUTAGE_SIM ]]; then
-        ./outage-sim-client.py > ${OUTAGE_SIM_LOG} 2>&1 &
+        ./outage_sim_client.py > ${OUTAGE_SIM_LOG} 2>&1 &
         OUTAGE_SIM_PID=$!
     fi
 
