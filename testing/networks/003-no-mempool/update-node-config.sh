@@ -12,6 +12,8 @@ for CFG_FILE in $(find /tmp/nodes -name 'config.toml'); do
         -e "s/^log_format = \(.*\)$/log_format = \"json\"/" \
         -e "s/^recheck = \(.*\)$/recheck = false/" \
         -e "s/^broadcast = \(.*\)$/broadcast = false/" \
+        -e "s/^size = 5000$/size = 0/" \
+        -e "s/^cache_size = 10000$/cache_size = 0/" \
         -e "s/^create_empty_blocks = \(.*\)$/create_empty_blocks = false/" \
         -e "s/^prometheus = \(.*\)$/prometheus = true/" \
         ${CFG_FILE}
