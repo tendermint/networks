@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/tendermint/networks/cmd/outage-sim-server/internal"
+	"github.com/tendermint/networks/internal/outagesim"
 )
 
 func main() {
@@ -25,7 +25,7 @@ be used for testing purposes and with careful network restrictions as to who
 can access this service.
 
 Usage:
-  outage-sim-server -addr 127.0.0.1:34000
+  tm-outage-sim-server -addr 127.0.0.1:34000
 
 Flags:`)
 		flag.PrintDefaults()
@@ -39,10 +39,11 @@ Examples of how to bring Tendermint up/down:
 
 	http.HandleFunc(
 		"/",
-		internal.MakeOutageEndpointHandler(
-			internal.IsTendermintRunning,
-			internal.ExecuteServiceCmd,
+		outagesim.MakeOutageEndpointHandler(
+			outagesim.IsTendermintRunning,
+			outagesim.ExecuteServiceCmd,
 		),
 	)
+	log.Printf("Starting Tendermint outage simulator server at %s\n", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
