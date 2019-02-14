@@ -7,3 +7,5 @@
 __pycache__
 *.bak
 *.retry
+.idea
+.terragrunt-cache
