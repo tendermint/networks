@@ -1,0 +1,52 @@
+version: 2.1
+
+aliases:
+  - &TERRAGRUNT tendermintdev/terragrunt
+
+commands:
+  apply-config:
+    steps:
+      - run:
+          name: Planning configuration
+          command: |
+            cd testnet-kitchen/conf
+            terragrunt plan -out ../src/plan.output
+
+            status=$?
+
+            # have to handle the exit code from terraform plan
+            # or circle job fails
+
+            if [[ ${status} == 2 ]]; then
+              terragrunt apply plan.output
+            elif [[ ${status} == 1 ]]; then
+              exit 1
+            else
+              exit 0
+            fi
+
+
+executors:
+  terragrunt:
+    docker:
+      - image: *TERRAGRUNT
+    environment:
+      AWS_REGION: us-east-1
+
+jobs:
+  build:
+    executor: terragrunt
+    steps:
+      - checkout
+      - apply-config
+
+workflows:
+  version: 2
+  iam_and_roles_config:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only:
+                - master
+                - mircea/devops184
