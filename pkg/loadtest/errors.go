@@ -2,18 +2,22 @@ package loadtest
 
 import "fmt"
 
+type ErrorCode int
+
 // Error/exit codes for load testing-related errors.
 const (
-	NoError int = iota
+	NoError ErrorCode = iota
 	ErrFailedToDecodeConfig
 	ErrFailedToReadConfigFile
 	ErrUnrecognizedWebSocketsMessage
+	ErrUnrecognizedReactorMessageType
+	ErrClientSentNonTextMsg
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
 // failure.
 type Error struct {
-	Code     int
+	Code     ErrorCode
 	Message  string
 	Upstream error
 }
@@ -23,10 +27,10 @@ var _ error = (*Error)(nil)
 
 // NewError allows us to create new Error structures from the given code and
 // upstream error (can be nil).
-func NewError(code int, upstream error) *Error {
+func NewError(code ErrorCode, upstream error, additionalInfo ...string) *Error {
 	return &Error{
 		Code:     code,
-		Message:  ErrorMessageForCode(code),
+		Message:  ErrorMessageForCode(code, additionalInfo...),
 		Upstream: upstream,
 	}
 }
@@ -41,17 +45,26 @@ func (e *Error) Error() string {
 
 // ErrorMessageForCode translates the given error code into a human-readable,
 // English message.
-func ErrorMessageForCode(code int) string {
+func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
+	var result string
 	switch code {
 	case NoError:
-		return "No error"
+		result = "No error"
 	case ErrFailedToDecodeConfig:
-		return "Failed to decode TOML configuration"
+		result = "Failed to decode TOML configuration"
 	case ErrFailedToReadConfigFile:
-		return "Failed to read configuration file"
+		result = "Failed to read configuration file"
 	case ErrUnrecognizedWebSocketsMessage:
-		return "Unrecognized WebSockets message type"
+		result = "Unrecognized WebSockets message type"
+	case ErrUnrecognizedReactorMessageType:
+		result = "Unrecognized reactor message type"
+	case ErrClientSentNonTextMsg:
+		result = "Client sent non-text message"
 	default:
 		return "Unrecognized error"
 	}
+	if len(additionalInfo) > 0 {
+		result = fmt.Sprintf("%s: %s", result, additionalInfo[0])
+	}
+	return result
 }

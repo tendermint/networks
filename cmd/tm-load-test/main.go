@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/tendermint/networks/pkg/loadtest"
 )
 
@@ -38,22 +38,26 @@ Flags:`)
 	}
 
 	if *isVerbose {
-		log.SetLevel(log.DebugLevel)
+		logrus.SetLevel(logrus.DebugLevel)
 	}
-	logger := log.WithField("mod", "main")
+	logger := logrus.WithField("ctx", "main")
+
+	var err error
 
 	if *isMaster {
 		logger.Infoln("Starting in MASTER mode")
+		err = loadtest.RunMaster(*configFile)
 	} else {
 		logger.Infoln("Starting in SLAVE mode")
+		err = loadtest.RunSlave(*configFile)
 	}
 
-	if err := loadtest.Execute(*isMaster, *configFile); err != nil {
-		logger.WithFields(log.Fields{
+	if err != nil {
+		logger.WithFields(logrus.Fields{
 			"err": err,
 		}).Errorln("Load test execution failed")
-		if ltErr, ok := err.(loadtest.Error); ok {
-			os.Exit(ltErr.ExitCode)
+		if ltErr, ok := err.(*loadtest.Error); ok {
+			os.Exit(ltErr.Code)
 		} else {
 			os.Exit(1)
 		}
