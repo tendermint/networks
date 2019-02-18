@@ -53,9 +53,7 @@ Flags:`)
 	}
 
 	if err != nil {
-		logger.WithFields(logrus.Fields{
-			"err": err,
-		}).Errorln("Load test execution failed")
+		logger.WithError(err).Errorln("Load test execution failed")
 		if ltErr, ok := err.(*loadtest.Error); ok {
 			os.Exit(int(ltErr.Code))
 		} else {
