@@ -26,16 +26,19 @@ const (
 	EvInvalidWebSocketsMsgFormat = "invalid-websockets-msg-format"
 	EvGetWebSocketsClientState   = "get-websockets-client-state"
 	EvSetWebSocketsClientState   = "set-websockets-client-state"
+	EvWebSocketsCloseConn        = "websockets-close-conn"
+	EvWebSocketsConnClosed       = "websockets-conn-closed"
 
 	// Slave-related messaging
-	EvSlaveReady           = "slave-ready"
-	EvSlaveAccepted        = "slave-accepted"
-	EvSlaveAlreadySeen     = "slave-already-seen"
-	EvTooManySlaves        = "too-many-slaves"
-	EvStartLoadTest        = "start-load-test"
-	EvSlaveStartedLoadTest = "slave-started-load-test"
-	EvSlaveFailed          = "slave-failed"
-	EvSlaveLoadTestStats   = "slave-load-test-stats"
+	EvSlaveReady            = "slave-ready"
+	EvSlaveAccepted         = "slave-accepted"
+	EvSlaveAlreadySeen      = "slave-already-seen"
+	EvTooManySlaves         = "too-many-slaves"
+	EvStartLoadTest         = "start-load-test"
+	EvSlaveStartedLoadTest  = "slave-started-load-test"
+	EvSlaveFinishedLoadTest = "slave-finished-load-test"
+	EvSlaveFailed           = "slave-failed"
+	EvSlaveLoadTestStats    = "slave-load-test-stats"
 )
 
 var errorEvents = map[string]struct{}{
@@ -50,6 +53,7 @@ var errorEvents = map[string]struct{}{
 	EvSlaveAlreadySeen:           {},
 	EvTooManySlaves:              {},
 	EvSlaveFailed:                {},
+	EvWebSocketsConnClosed:       {},
 }
 
 var noDataEvents = map[string]struct{}{
@@ -103,6 +107,10 @@ func eventDescription(t string, additionalInfo ...string) string {
 		result = "Get WebSockets client state"
 	case EvSetWebSocketsClientState:
 		result = "Set WebSockets client state"
+	case EvWebSocketsCloseConn:
+		result = "Close WebSockets connection"
+	case EvWebSocketsConnClosed:
+		result = "WebSockets connection closed"
 
 	case EvSlaveReady:
 		result = "Slave is ready to start load test"
@@ -116,6 +124,8 @@ func eventDescription(t string, additionalInfo ...string) string {
 		result = "Master broadcast message to start load testing across slaves"
 	case EvSlaveStartedLoadTest:
 		result = "Slave started load test"
+	case EvSlaveFinishedLoadTest:
+		result = "Slave successfully finished load test"
 	case EvSlaveFailed:
 		result = "Slave failed"
 	case EvSlaveLoadTestStats:

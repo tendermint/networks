@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,28 +10,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type webSocketsClientState string
-
 // webSocketsClient allows us to encapsulate a connected client in such a way
 // that we can use a single event loop to interact with the WebSocket
 // connection, because it's not thread-safe.
 type webSocketsClient struct {
 	*BaseReactor
 
+	id     string
 	conn   *websocket.Conn
 	logger *logrus.Entry
-	master *MasterNode           // So we can communicate with the master node.
-	state  webSocketsClientState // What's the current state of the client in its state machine?
+	master *MasterNode // So we can communicate with the master node.
+	state  SlaveState  // What's the current state of the client in its state machine?
 }
 
-const (
-	csConnected webSocketsClientState = "connected" // The client has just connected to the master.
-	csRejected  webSocketsClientState = "rejected"  // The client has been rejected for some reason.
-	csAccepted  webSocketsClientState = "accepted"  // The client has been accepted and the master is waiting for all slaves to connect.
-	csFailed    webSocketsClientState = "failed"    // The client failed in some way.
-	csTesting   webSocketsClientState = "testing"   // Load testing is underway.
-	csFinished  webSocketsClientState = "finished"  // Load testing is finished.
-)
+// WebSocketsReactor is a kind of reactor that deals exclusively with the
+// management of a WebSockets connection and its lifecycle.
+type WebSocketsReactor struct {
+	*BaseReactor
+
+	conn *websocket.Conn // The WebSockets connection.
+}
 
 // Networking deadlines for WebSockets-related communications.
 const (
@@ -42,6 +41,7 @@ const (
 type webSocketsLoopHandler func(*webSocketsClient) bool
 
 var _ Reactor = (*webSocketsClient)(nil)
+var _ Reactor = (*WebSocketsReactor)(nil)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024 * 1024,
@@ -59,13 +59,20 @@ func makeNodeWebSocketsHandler(m *MasterNode) func(http.ResponseWriter, *http.Re
 
 		client := newWebSocketsClient(conn, m)
 		client.Start()
+	loop:
 		for {
 			if !client.handleWebSockets() {
 				client.Shutdown()
-				break
+				break loop
 			}
 		}
+		m.Logger.Debugln("Terminated client WebSockets handler loop")
+		// wait for the client reactor loop to finish shutting down
 		client.Wait()
+		if err = conn.Close(); err != nil {
+			m.Logger.WithError(err).Errorln("Failed to close WebSockets connection")
+		}
+		m.Logger.Debugln("Closed WebSockets connection")
 	}
 }
 
@@ -83,66 +90,27 @@ func sendWebSocketsMsgEnvelope(conn *websocket.Conn, env *WebSocketsMsgEnvelope)
 
 func newWebSocketsClient(conn *websocket.Conn, m *MasterNode) *webSocketsClient {
 	c := &webSocketsClient{
-		BaseReactor: NewBaseReactor(nil),
-		conn:        conn,
-		logger:      logrus.WithField("ctx", "webSocketsClient"),
-		master:      m,
+		id:     "no-id-yet",
+		conn:   conn,
+		logger: logrus.WithField("ctx", "webSocketsClient"),
+		master: m,
 	}
-	c.BaseReactor.impl = c
+	c.BaseReactor = NewBaseReactor(c, "websockets")
 	return c
 }
 
-func (c *webSocketsClient) Handle(e ReactorEvent) {
-	switch e.Type {
-	// internal events to the WebSockets client
-	case EvRecvWebSocketsMsg:
-		c.recvWebSocketsMsg(e)
-	case EvSendWebSocketsMsg:
-		ev, ok := e.Data.(ReactorEvent)
-		if ok {
-			c.sendWebSocketsMsg(ev)
-		} else {
-			c.logger.WithField("e.Type", e.Type).Errorln("Failed to convert reactor event data to reactor event")
-		}
-	case EvGetWebSocketsClientState:
-		e.Respond(ReactorEvent{Type: EvGetWebSocketsClientState, Data: c.state})
-	case EvSetWebSocketsClientState:
-		c.state = e.Data.(webSocketsClientState)
-		e.Respond(ReactorEvent{Type: EvOK})
-
-	case EvSlaveReady:
-		r := c.master.RecvAndAwait(e)
-		e.Respond(r)
-		if r.Type == EvSlaveAccepted {
-			c.state = csAccepted
-		} else {
-			c.state = csRejected
-		}
-
-	case EvStartLoadTest:
-		// pass the test start message on to the client
-		c.sendWebSocketsMsg(e)
-
-	case EvSlaveStartedLoadTest:
-		c.state = csTesting
-
-	case EvSlaveFailed:
-		c.state = csFailed
-		// indicate to the master that this slave failed, so it can stop the
-		// load test across the other slaves
-		c.master.RecvAndAwait(e)
-
-	default:
-		e.Respond(ReactorEvent{Type: EvUnrecognizedEventType, Data: e.Type})
+func (c *webSocketsClient) OnShutdown() {
+	if err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+		c.logger.WithError(err).Errorln("Failed to write close message to WebSockets client")
 	}
 }
 
-func (c *webSocketsClient) GetState() webSocketsClientState {
+func (c *webSocketsClient) GetState() SlaveState {
 	r := c.RecvAndAwait(ReactorEvent{Type: EvGetWebSocketsClientState})
-	return r.Data.(webSocketsClientState)
+	return r.Data.(SlaveState)
 }
 
-func (c *webSocketsClient) SetState(state webSocketsClientState) {
+func (c *webSocketsClient) SetState(state SlaveState) {
 	c.RecvAndAwait(ReactorEvent{Type: EvSetWebSocketsClientState, Data: state})
 }
 
@@ -167,7 +135,7 @@ func (c *webSocketsClient) HandleInitialSlaveConnect() bool {
 func (c *webSocketsClient) HandleSlaveStatsCollection() {
 	// we want a longer timeout here, as we won't get stats very frequently from the client
 	timeout := time.Duration(60) * time.Second
-	ev := c.RecvAndAwait(ReactorEvent{Type: EvRecvWebSocketsMsg, Timeout: &timeout}, timeout)
+	ev := c.RecvAndAwait(ReactorEvent{Type: EvRecvWebSocketsMsg, Timeout: timeout}, timeout)
 	// pass the resulting event on to the client event loop
 	c.Recv(ev)
 }
@@ -175,72 +143,148 @@ func (c *webSocketsClient) HandleSlaveStatsCollection() {
 // This routine translates WebSockets-based interactions into ReactorEvents and
 // vice-versa.
 func (c *webSocketsClient) handleWebSockets() bool {
+	c.logger.WithField("state", c.GetState()).Debugln("handleWebSockets()")
 	switch c.GetState() {
 	// if the client has just connected
-	case csConnected:
+	case SSConnected:
 		return c.HandleInitialSlaveConnect()
 
 	// if we're waiting for the master to give us the go-ahead.
-	case csAccepted:
+	case SSAccepted:
 		return true
 
 	// if the client is busy with load testing, continue.
-	case csTesting:
+	case SSTesting:
 		// check if more stats have come through
 		c.HandleSlaveStatsCollection()
 		return true
 	}
+	c.logger.Debugln("Terminating WebSockets client connection")
 	// terminate the WebSockets connection
 	return false
 }
 
-func (c *webSocketsClient) recvWebSocketsMsg(e ReactorEvent) {
-	timeout := DefaultWebSocketsReadDeadline
-	if e.Timeout != nil {
-		timeout = *e.Timeout
-	}
-	c.conn.SetReadDeadline(time.Now().Add(timeout))
+//
+// WebSocketsReactor public methods
+//
 
-	// we expect the client to speak to us first
-	mt, p, err := c.conn.ReadMessage()
-	if err != nil {
-		c.logger.WithError(err).Errorln("Failed to read message from WebSockets client")
-		e.Respond(ReactorEvent{Type: EvWebSocketsReadFailed, Data: err})
-		return
+// NewWebSocketsReactor will instantiate a new reactor that deals exclusively
+// with WebSockets connections and communication. This offers thread safety in
+// the use of the WebSockets connection, which is inherently not thread-safe.
+func NewWebSocketsReactor(conn *websocket.Conn) *WebSocketsReactor {
+	r := &WebSocketsReactor{
+		conn: conn,
 	}
-
-	if mt != websocket.TextMessage {
-		c.logger.Errorln("Client sent non-text message")
-		e.Respond(ReactorEvent{Type: EvInvalidWebSocketsMsgFormat})
-		return
-	}
-
-	// try to decode the incoming message
-	env, err := parseWebSocketsMsgEnvelope(string(p))
-	if err != nil {
-		c.logger.WithError(err).WithField("env", string(p)).Errorln("Failed to parse incoming WebSockets message envelope")
-		e.Respond(ReactorEvent{Type: EvParsingFailed, Data: err})
-		return
-	}
-
-	// respond with the envelope
-	e.Respond(ReactorEvent{Type: env.Type, Data: env.Message})
+	r.BaseReactor = NewBaseReactor(r, "websockets")
+	return r
 }
 
-func (c *webSocketsClient) sendWebSocketsMsg(e ReactorEvent) {
+// Handle will handle the internal event loop for the WebSockets reactor.
+func (r *WebSocketsReactor) Handle(e ReactorEvent) {
+	switch e.Type {
+	case EvRecvWebSocketsMsg:
+		r.recvWebSocketsMsg(e)
+
+	case EvSendWebSocketsMsg:
+		r.sendWebSocketsMsg(e)
+
+	case EvWebSocketsCloseConn:
+		r.closeConn(e)
+
+	case EvWebSocketsConnClosed:
+		r.Shutdown()
+	}
+}
+
+// RecvMsg will wait for an incoming message over the WebSockets connection.
+func (r *WebSocketsReactor) RecvMsg(timeouts ...time.Duration) (*WebSocketsMsgEnvelope, error) {
+	timeout := DefaultWebSocketsReadDeadline
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+	e := r.RecvAndAwait(ReactorEvent{Type: EvRecvWebSocketsMsg, Timeout: timeout})
+	if e.IsError() {
+		return nil, e.Data.(error)
+	}
+	return &WebSocketsMsgEnvelope{Type: e.Type, Message: e.Data}, nil
+}
+
+// SendMsg will attempt to send the given message over the WebSockets
+// connection.
+func (r *WebSocketsReactor) SendMsg(msg *WebSocketsMsgEnvelope, timeouts ...time.Duration) error {
+	timeout := DefaultWebSocketsWriteDeadline
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+	msgEv := ReactorEvent{Type: msg.Type, Data: msg.Message}
+	e := r.RecvAndAwait(ReactorEvent{Type: EvSendWebSocketsMsg, Data: msgEv, Timeout: timeout})
+	if e.IsError() {
+		return e.Data.(error)
+	}
+	return nil
+}
+
+//
+// WebSocketsReactor private methods
+//
+
+func (r *WebSocketsReactor) recvWebSocketsMsg(e ReactorEvent) {
+	timeout := DefaultWebSocketsReadDeadline
+	if e.Timeout > 0 {
+		timeout = e.Timeout
+	}
+	r.conn.SetReadDeadline(time.Now().Add(timeout))
+
+	// we expect the client to speak to us first
+	mt, p, err := r.conn.ReadMessage()
+	if err != nil {
+		e.Respond(ReactorEvent{Type: EvWebSocketsReadFailed, Data: err})
+	}
+
+	switch mt {
+	case websocket.TextMessage:
+		// try to decode the incoming message
+		env, err := parseWebSocketsMsgEnvelope(string(p))
+		if err != nil {
+			e.Respond(ReactorEvent{Type: EvParsingFailed, Data: err})
+		}
+		e.Respond(ReactorEvent{Type: env.Type, Data: env.Message})
+
+	case websocket.CloseMessage:
+		res := ReactorEvent{Type: EvWebSocketsConnClosed}
+		e.Respond(res)
+		r.Recv(res)
+
+	default:
+		e.Respond(ReactorEvent{Type: EvInvalidWebSocketsMsgFormat, Data: fmt.Errorf("Invalid WebSockets message format: %d", mt)})
+	}
+}
+
+func (r *WebSocketsReactor) sendWebSocketsMsg(e ReactorEvent) {
 	raw, err := json.Marshal(&WebSocketsMsgEnvelope{Type: e.Type, Message: e.Data})
 	if err == nil {
 		timeout := DefaultWebSocketsWriteDeadline
-		if e.Timeout != nil {
-			timeout = *e.Timeout
+		if e.Timeout > 0 {
+			timeout = e.Timeout
 		}
-		c.conn.SetReadDeadline(time.Now().Add(timeout))
-
-		err = c.conn.WriteMessage(websocket.TextMessage, raw)
+		r.conn.SetWriteDeadline(time.Now().Add(timeout))
+		err = r.conn.WriteMessage(websocket.TextMessage, raw)
 	}
 	if err != nil {
 		e.Respond(ReactorEvent{Type: EvWebSocketsWriteFailed, Data: err})
 	} else {
 		e.Respond(ReactorEvent{Type: EvOK})
 	}
+}
+
+func (r *WebSocketsReactor) closeConn(e ReactorEvent) {
+	r.logger.Debugln("Closing WebSockets reactor connection")
+	if err := r.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+		r.logger.WithError(err).Errorln("Failed to close WebSockets connection")
+		e.Respond(ReactorEvent{Type: EvWebSocketsWriteFailed, Data: err})
+	} else {
+		r.logger.Debugln("Successfully closed WebSockets connection")
+		e.Respond(ReactorEvent{Type: EvOK})
+	}
+	r.Shutdown()
 }

@@ -2,6 +2,8 @@ package loadtest
 
 import "fmt"
 
+// ErrorCode allows us to encapsulate specific failure codes for the node
+// processes.
 type ErrorCode int
 
 // Error/exit codes for load testing-related errors.
@@ -11,7 +13,9 @@ const (
 	ErrFailedToReadConfigFile
 	ErrUnrecognizedWebSocketsMessage
 	ErrUnrecognizedReactorMessageType
-	ErrClientSentNonTextMsg
+	ErrSlaveFailed
+	ErrFailedToConnectToMaster
+	ErrSlaveRejected
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
@@ -58,8 +62,12 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Unrecognized WebSockets message type"
 	case ErrUnrecognizedReactorMessageType:
 		result = "Unrecognized reactor message type"
-	case ErrClientSentNonTextMsg:
-		result = "Client sent non-text message"
+	case ErrSlaveFailed:
+		result = "Slave failed"
+	case ErrFailedToConnectToMaster:
+		result = "Failed to connect to master"
+	case ErrSlaveRejected:
+		result = "Slave rejected by master"
 	default:
 		return "Unrecognized error"
 	}

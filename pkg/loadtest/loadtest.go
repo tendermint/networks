@@ -12,5 +12,10 @@ func RunMaster(configFile string) error {
 
 // RunSlave will create the slave node server and run it (blocking).
 func RunSlave(configFile string) error {
-	return nil
+	config, err := LoadConfig(configFile)
+	if err != nil {
+		return err
+	}
+	n := NewSlaveNode(config)
+	return n.RunAndWait()
 }

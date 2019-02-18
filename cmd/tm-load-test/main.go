@@ -57,7 +57,7 @@ Flags:`)
 			"err": err,
 		}).Errorln("Load test execution failed")
 		if ltErr, ok := err.(*loadtest.Error); ok {
-			os.Exit(ltErr.Code)
+			os.Exit(int(ltErr.Code))
 		} else {
 			os.Exit(1)
 		}
