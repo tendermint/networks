@@ -42,7 +42,7 @@ func NewError(code ErrorCode, upstream error, additionalInfo ...string) *Error {
 // Error implements error.
 func (e *Error) Error() string {
 	if e.Upstream != nil {
-		return fmt.Sprintf("%s. Caused by: %s", e.Message, e.Upstream.Error())
+		return fmt.Sprintf("%s\nCaused by: %s", e.Message, e.Upstream.Error())
 	}
 	return e.Message
 }
