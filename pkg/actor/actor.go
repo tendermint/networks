@@ -117,8 +117,16 @@ func (a *BaseActor) GetID() string {
 // and calls that implementation's Handle method.
 func (a *BaseActor) Handle(m Message) {
 	a.logger.WithField("m", m).Debugln("Got incoming message")
-	if a.impl != nil {
-		a.impl.Handle(m)
+
+	switch m.Type {
+	case PoisonPill:
+		a.logger.Debugln("Got poison pill, shutting down")
+		a.Shutdown()
+
+	default:
+		if a.impl != nil {
+			a.impl.Handle(m)
+		}
 	}
 }
 

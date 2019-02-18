@@ -86,3 +86,23 @@ func TestBaseActorLifecycle(t *testing.T) {
 		t.Fatal("Timed out waiting for test actor to shut down")
 	}
 }
+
+func TestPoisonPill(t *testing.T) {
+	a := newTestActor()
+	a.Start()
+
+	a.Recv(Message{Type: PoisonPill})
+
+	done := make(chan struct{})
+	go func() {
+		a.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Successfully poisoned actor and triggered shutdown")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for poison pill to kill actor")
+	}
+}

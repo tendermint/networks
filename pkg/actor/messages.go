@@ -8,8 +8,9 @@ type MessageType string
 
 // Generic message types for actor communication.
 const (
-	Ping MessageType = "ping"
-	Pong MessageType = "pong"
+	Ping       MessageType = "ping"
+	Pong       MessageType = "pong"
+	PoisonPill MessageType = "poison-pill"
 )
 
 // Message encapsulates a message that can be sent between actors.
