@@ -21,7 +21,7 @@ func newTestActor() *testActor {
 		startupChan:  make(chan struct{}),
 		shutdownChan: make(chan struct{}),
 	}
-	t.BaseActor = NewBaseActor(t)
+	t.BaseActor = NewBaseActor(t, "test")
 	return t
 }
 

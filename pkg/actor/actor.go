@@ -33,9 +33,10 @@ var _ Actor = (*BaseActor)(nil)
 // BaseActor is a convenience class from which we can derive other actors. This
 // is effectively an "abstract class" and should be treated as such.
 type BaseActor struct {
-	impl   Actor // The implementation/derived class for this actor.
-	id     string
-	logger *logrus.Entry
+	Logger *logrus.Entry
+
+	impl Actor // The implementation/derived class for this actor.
+	id   string
 
 	inboxChan            chan Message
 	shutdownChan         chan struct{}
@@ -44,13 +45,13 @@ type BaseActor struct {
 
 // NewBaseActor instantiates a BaseActor that can be used to provide the basic
 // event handling functionality.
-func NewBaseActor(impl Actor) *BaseActor {
+func NewBaseActor(impl Actor, ctx string) *BaseActor {
 	id := uuid.NewV4().String()
 	return &BaseActor{
 		impl: impl,
 		id:   id,
-		logger: logrus.WithFields(logrus.Fields{
-			"ctx": "BaseActor",
+		Logger: logrus.WithFields(logrus.Fields{
+			"ctx": ctx,
 			"id":  id,
 		}),
 		inboxChan:            make(chan Message, DefaultActorInboxSize),
@@ -68,7 +69,7 @@ func (a *BaseActor) OnShutdown()    {}
 func (a *BaseActor) Start() error {
 	if a.impl != nil {
 		if err := a.impl.OnStart(); err != nil {
-			a.logger.WithError(err).Errorln("OnStart event for actor failed")
+			a.Logger.WithError(err).Errorln("OnStart event for actor failed")
 			return err
 		}
 	}
@@ -116,11 +117,11 @@ func (a *BaseActor) GetID() string {
 // Handle will, by default, just check if we have an implementation actor class
 // and calls that implementation's Handle method.
 func (a *BaseActor) Handle(m Message) {
-	a.logger.WithField("m", m).Debugln("Got incoming message")
+	a.Logger.WithField("m", m).Debugln("Got incoming message")
 
 	switch m.Type {
 	case PoisonPill:
-		a.logger.Debugln("Got poison pill, shutting down")
+		a.Logger.Debugln("Got poison pill, shutting down")
 		a.Shutdown()
 
 	default:
@@ -133,6 +134,6 @@ func (a *BaseActor) Handle(m Message) {
 // Recv allows BaseActor to queue an incoming message to be handled by its event
 // loop.
 func (a *BaseActor) Recv(m Message) {
-	a.logger.WithField("m", m).Debugln("Recv")
+	a.Logger.WithField("m", m).Debugln("Recv")
 	a.inboxChan <- m
 }
