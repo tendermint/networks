@@ -16,6 +16,8 @@ const (
 	ErrSlaveFailed
 	ErrFailedToConnectToMaster
 	ErrSlaveRejected
+	ErrUnsupportedWebSocketsMessageType
+	ErrWebSocketsConnClosed
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
@@ -68,6 +70,10 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Failed to connect to master"
 	case ErrSlaveRejected:
 		result = "Slave rejected by master"
+	case ErrUnsupportedWebSocketsMessageType:
+		result = "Unsupported WebSockets message type (must be text)"
+	case ErrWebSocketsConnClosed:
+		result = "WebSockets connection closed"
 	default:
 		return "Unrecognized error"
 	}
