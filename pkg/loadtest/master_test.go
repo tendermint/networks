@@ -16,7 +16,7 @@ func testConfig() *loadtest.Config {
 	return &loadtest.Config{
 		Master: loadtest.MasterConfig{
 			Bind:         masterAddr,
-			ExpectSlaves: 1,
+			ExpectSlaves: 2,
 		},
 		Slave: loadtest.SlaveConfig{
 			Master: masterAddr,
@@ -46,7 +46,8 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	}
 
 	// mock the interaction between the master and a slave
-	mockWebSocketsClient(t, cfg.Slave.Master)
+	go mockWebSocketsClient(t, cfg.Slave.Master, "slave1")
+	go mockWebSocketsClient(t, cfg.Slave.Master, "slave2")
 
 	done := make(chan struct{})
 	go func() {
@@ -65,14 +66,14 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	}
 }
 
-func mockWebSocketsClient(t *testing.T, masterAddr string) {
+func mockWebSocketsClient(t *testing.T, masterAddr, slaveID string) {
 	c, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("ws://%s", masterAddr), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
 
-	id := loadtest.SlaveIDMessage{ID: "test-slave"}
+	id := loadtest.SlaveIDMessage{ID: slaveID}
 
 	// first tell the master that we're ready
 	if err := loadtest.WebSocketsSend(c, actor.Message{Type: loadtest.SlaveReady, Data: id}); err != nil {
