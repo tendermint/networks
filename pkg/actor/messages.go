@@ -69,10 +69,6 @@ func RouteToDeadLetterInbox(msg Message) {
 	}
 }
 
-func (m Message) String() string {
-	return fmt.Sprintf("Message{Type: \"%s\", Data: %v, Sender: \"%v\"}", m.Type, m.Data, m.Sender.GetID())
-}
-
 // Error will return an error if the data contained in the message is an error,
 // otherwise it returns nil.
 func (m Message) Error() error {
@@ -88,7 +84,7 @@ func ParseJSONMessage(s string) (*Message, error) {
 	m := baseMessage{
 		Data: &raw,
 	}
-	if err := json.Unmarshal([]byte(s), m); err != nil {
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
 		return nil, err
 	}
 	parser, ok := messageParserRegistry.Parsers[m.Type]
