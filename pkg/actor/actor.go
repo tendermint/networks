@@ -41,8 +41,9 @@ var _ Actor = (*BaseActor)(nil)
 type BaseActor struct {
 	Logger *logrus.Entry
 
-	impl Actor // The implementation/derived class for this actor.
-	id   string
+	impl Actor  // The implementation/derived class for this actor.
+	ctx  string // The context string for logging.
+	id   string // The primary ID for this actor.
 
 	inboxChan            chan Message
 	shutdownChan         chan struct{}
@@ -56,19 +57,18 @@ type BaseActor struct {
 // event handling functionality.
 func NewBaseActor(impl Actor, ctx string) *BaseActor {
 	id := uuid.NewV4().String()
-	return &BaseActor{
-		impl: impl,
-		id:   id,
-		Logger: logrus.WithFields(logrus.Fields{
-			"ctx": ctx,
-			"id":  id,
-		}),
+	a := &BaseActor{
+		impl:                 impl,
+		ctx:                  ctx,
+		id:                   id,
+		Logger:               makeActorLogger(ctx, id),
 		inboxChan:            make(chan Message, DefaultActorInboxSize),
 		shutdownChan:         make(chan struct{}),
 		shutdownCompleteChan: make(chan struct{}),
 		shutdownCompleted:    false,
 		mtx:                  &sync.RWMutex{},
 	}
+	return a
 }
 
 func (a *BaseActor) OnStart() error { return nil }
@@ -135,6 +135,8 @@ func (a *BaseActor) SetID(id string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 	a.id = id
+	// reconfigure the logger
+	a.Logger = makeActorLogger(a.ctx, id)
 }
 
 // Handle will, by default, just check if we have an implementation actor class
@@ -156,9 +158,9 @@ func (a *BaseActor) Handle(m Message) {
 
 // Recv allows BaseActor to queue an incoming message to be handled by its event
 // loop.
-func (a *BaseActor) Recv(m Message) {
-	a.Logger.WithField("m", m).Debugln("Recv")
-	a.inboxChan <- m
+func (a *BaseActor) Recv(msg Message) {
+	a.Logger.WithField("msg", msg).Debugln("Recv")
+	a.inboxChan <- msg
 }
 
 // Send is a convenience function to send a message to the given actor with this
@@ -166,8 +168,19 @@ func (a *BaseActor) Recv(m Message) {
 func (a *BaseActor) Send(other Actor, msg Message) {
 	msg.Sender = a
 	if other != nil {
+		a.Logger.WithFields(logrus.Fields{
+			"msg":   msg,
+			"other": other.GetID(),
+		}).Debugln("Sending message to actor")
 		other.Recv(msg)
 	} else {
 		RouteToDeadLetterInbox(msg)
 	}
+}
+
+func makeActorLogger(ctx, id string) *logrus.Entry {
+	return logrus.WithFields(logrus.Fields{
+		"ctx": ctx,
+		"id":  id,
+	})
 }
