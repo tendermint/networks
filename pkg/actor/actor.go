@@ -146,5 +146,9 @@ func (a *BaseActor) Recv(m Message) {
 // actor as the sender.
 func (a *BaseActor) Send(other Actor, msg Message) {
 	msg.Sender = a
-	other.Recv(msg)
+	if other != nil {
+		other.Recv(msg)
+	} else {
+		RouteToDeadLetterInbox(msg)
+	}
 }
