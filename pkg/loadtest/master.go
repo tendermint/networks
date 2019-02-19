@@ -114,6 +114,9 @@ func (n *MasterNode) Handle(msg actor.Message) {
 
 	case SlaveFailed:
 		n.slaveFailed(msg)
+
+	case ConnectionClosed:
+		n.connectionClosed(msg)
 	}
 }
 
@@ -215,6 +218,8 @@ func (n *MasterNode) removeRemoteSlave(id string) {
 		n.mtx.Lock()
 		defer n.mtx.Unlock()
 		delete(n.remoteSlaves, id)
+	} else {
+		n.Logger.WithField("id", id).Errorln("No such slave to remove")
 	}
 }
 
@@ -284,5 +289,14 @@ func (n *MasterNode) slaveFinished(msg actor.Message) {
 		n.Logger.Infoln("All slaves successfully completed load testing")
 		n.shutdownErr = nil
 		n.Shutdown()
+	}
+}
+
+func (n *MasterNode) connectionClosed(msg actor.Message) {
+	idMsg, ok := msg.Data.(SlaveIDMessage)
+	if ok {
+		n.removeRemoteSlave(idMsg.ID)
+	} else {
+		n.Logger.Errorln("Got connection closed message from unknown source")
 	}
 }
