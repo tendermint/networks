@@ -48,6 +48,7 @@ type BaseActor struct {
 	inboxChan            chan Message
 	shutdownChan         chan struct{}
 	shutdownCompleteChan chan struct{}
+	shutdownStarted      bool
 	shutdownCompleted    bool
 
 	mtx *sync.RWMutex
@@ -65,6 +66,7 @@ func NewBaseActor(impl Actor, ctx string) *BaseActor {
 		inboxChan:            make(chan Message, DefaultActorInboxSize),
 		shutdownChan:         make(chan struct{}),
 		shutdownCompleteChan: make(chan struct{}),
+		shutdownStarted:      false,
 		shutdownCompleted:    false,
 		mtx:                  &sync.RWMutex{},
 	}
@@ -108,19 +110,46 @@ loop:
 // you want to know once the shutdown process is complete, use the Wait()
 // function.
 func (a *BaseActor) Shutdown() {
-	if a.impl != nil {
-		a.impl.OnShutdown()
+	if !a.isShutdownStarted() {
+		if a.impl != nil {
+			a.impl.OnShutdown()
+		}
+		close(a.shutdownChan)
+		a.setShutdownStarted(true)
 	}
-	close(a.shutdownChan)
 }
 
 // Wait will block the current goroutine and wait until the actor's shutdown
 // process is complete.
 func (a *BaseActor) Wait() {
-	if !a.shutdownCompleted {
+	if !a.isShutdownCompleted() {
 		<-a.shutdownCompleteChan
-		a.shutdownCompleted = true
+		a.setShutdownCompleted(true)
 	}
+}
+
+func (a *BaseActor) isShutdownStarted() bool {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+	return a.shutdownStarted
+}
+
+func (a *BaseActor) setShutdownStarted(newVal bool) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	a.shutdownStarted = newVal
+}
+
+func (a *BaseActor) isShutdownCompleted() bool {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+	return a.shutdownCompleted
+}
+
+func (a *BaseActor) setShutdownCompleted(newVal bool) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	a.shutdownCompleted = newVal
 }
 
 // GetID will retrieve the actor's ID, which should be universally unique.
