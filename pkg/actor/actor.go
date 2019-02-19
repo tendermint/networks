@@ -23,6 +23,9 @@ type Actor interface {
 	// its inbox.
 	Recv(m Message)
 
+	Start() error
+	Shutdown()
+
 	// Lifecycle events
 	OnStart() error
 	OnShutdown()
