@@ -141,3 +141,10 @@ func (a *BaseActor) Recv(m Message) {
 	a.Logger.WithField("m", m).Debugln("Recv")
 	a.inboxChan <- m
 }
+
+// Send is a convenience function to send a message to the given actor with this
+// actor as the sender.
+func (a *BaseActor) Send(other Actor, msg Message) {
+	msg.Sender = a
+	other.Recv(msg)
+}
