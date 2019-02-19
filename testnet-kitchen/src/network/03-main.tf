@@ -1,3 +1,11 @@
+provider "aws" {
+  region = "${var.aws_region}"
+}
+
+terraform {
+  backend "s3" {}
+}
+
 data "aws_availability_zones" available {}
 
 resource "aws_vpc" "testnet" {
@@ -23,7 +31,7 @@ resource "aws_eip" "nat" {
   vpc = true
 
   tags {
-    Name = "EIP for NAT"
+    Name = "testnets-ecs-ec2"
   }
 }
 
@@ -33,20 +41,18 @@ resource "aws_nat_gateway" "testnet_container_instance" {
 }
 
 resource "aws_subnet" "testnet_public" {
-  count                   = "${length(var.chain_ids)}"
-  cidr_block              = "${cidrsubnet(aws_vpc.testnet.cidr_block, 8, length(var.chain_ids) + count.index)}"
+  cidr_block              = "${cidrsubnet(aws_vpc.testnet.cidr_block, 8, 1)}"
   availability_zone_id    = "${data.aws_availability_zones.available.zone_ids[0]}"
   vpc_id                  = "${aws_vpc.testnet.id}"
   map_public_ip_on_launch = true
 
   tags {
-    Name = "${element(var.chain_ids, count.index)}-public"
+    Name = "testnets-ecs-ec2-public"
   }
 }
 
 resource "aws_subnet" "testnet_private" {
-  count                   = "${length(var.chain_ids)}"
-  cidr_block              = "${cidrsubnet(aws_vpc.testnet.cidr_block, 8, length(var.chain_ids) * 2 + count.index)}"
+  cidr_block              = "${cidrsubnet(aws_vpc.testnet.cidr_block, 8, 2)}"
   vpc_id                  = "${aws_vpc.testnet.id}"
   map_public_ip_on_launch = false
 
@@ -54,7 +60,7 @@ resource "aws_subnet" "testnet_private" {
   availability_zone_id = "${data.aws_availability_zones.available.zone_ids[1]}"
 
   tags {
-    Name = "${element(var.chain_ids, count.index)}-private"
+    Name = "testnets-ecs-ec2-private"
   }
 }
 
@@ -62,7 +68,7 @@ resource "aws_route_table" "testnet_public_subnet" {
   vpc_id = "${aws_vpc.testnet.id}"
 
   tags {
-    Name = "testnets-public-subnet"
+    Name = "testnets-ecs-ec2-subnet"
   }
 }
 
@@ -70,32 +76,28 @@ resource "aws_route_table" "testnet_private_subnet" {
   vpc_id = "${aws_vpc.testnet.id}"
 
   tags {
-    Name = "testnets-private-subnet"
+    Name = "testnets-ecs-ec2-private-subnet"
   }
 }
 
 resource "aws_route" "testnet_internet_gateway" {
-  count                  = "${length(var.chain_ids)}"
   route_table_id         = "${aws_route_table.testnet_public_subnet.id}"
   gateway_id             = "${aws_internet_gateway.gateway.id}"
   destination_cidr_block = "0.0.0.0/0"
 }
 
 resource "aws_route" "testnet_nat" {
-  count                  = "${length(var.chain_ids)}"
   route_table_id         = "${aws_route_table.testnet_private_subnet.id}"
   nat_gateway_id         = "${aws_nat_gateway.testnet_container_instance.id}"
   destination_cidr_block = "0.0.0.0/0"
 }
 
 resource "aws_route_table_association" "testnet_public_subnet" {
-  count          = "${length(var.chain_ids)}"
-  subnet_id      = "${element(aws_subnet.testnet_public.*.id, count.index)}"
+  subnet_id      = "${aws_subnet.testnet_public.id}"
   route_table_id = "${aws_route_table.testnet_public_subnet.id}"
 }
 
 resource "aws_route_table_association" "testnet_nat" {
-  count          = "${length(var.chain_ids)}"
   route_table_id = "${aws_route_table.testnet_private_subnet.id}"
-  subnet_id      = "${element(aws_subnet.testnet_private.*.id, count.index)}"
+  subnet_id      = "${aws_subnet.testnet_private.id}"
 }

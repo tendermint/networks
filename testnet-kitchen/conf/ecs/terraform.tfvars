@@ -7,14 +7,14 @@ terragrunt = {
     config {
       bucket         = "tendermint-dev-terraform"
       region         = "us-east-1"
-      key            = "testnets/ecs_ec2.tfstate"
+      key            = "testnets/${get_env("CHAIN_ID", "ecs-testnet")}.tfstate"
       encrypt        = true
       dynamodb_table = "testnets-state-lock"
     }
   }
 
   terraform {
-    source = "..//src"
+    source = "../../src//ecs"
   }
 }
 

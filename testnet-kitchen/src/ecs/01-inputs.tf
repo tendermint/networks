@@ -5,10 +5,6 @@ variable "chain_id" {
   default = "testnet"
 }
 
-variable "chain_ids" {
-  type = "list"
-}
-
 variable "aws_region" {
   type    = "string"
   default = "us-east-1"
@@ -57,6 +53,11 @@ variable "gaiad_memory" {
 variable "rpc_port" {
   description = "gaiad RPC port"
   default     = "26657"
+}
+
+variable "stargate_port" {
+  description = "stargate access port"
+  default     = "1317"
 }
 
 variable "stargate_instances" {
