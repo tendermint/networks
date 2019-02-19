@@ -1,44 +1,51 @@
-version: 2.1
+version: 2
 
 aliases:
   - &TERRAGRUNT tendermintdev/terragrunt
 
-commands:
-  apply-config:
-    steps:
-      - run:
-          name: Planning configuration
-          command: |
-            cd testnet-kitchen/conf
-            terragrunt plan -out ../src/plan.output
+network: &network
+  run:
+    name: Applying network configuration
+    command: |
+      cd testnet-kitchen/conf/network
 
-            status=$?
+      terragrunt plan -out ~/plan.output
+      terragrunt apply ~/plan.output
+      rm ~/plan.output
 
-            # have to handle the exit code from terraform plan
-            # or circle job fails
+ecs: &ecs
+  run:
+    name: Applying ecs configuration
+    command: |
+      export FILES_FOLDER=testnet-kitchen/src/ecs/files
 
-            if [[ ${status} == 2 ]]; then
-              terragrunt apply plan.output
-            elif [[ ${status} == 1 ]]; then
-              exit 1
-            else
-              exit 0
-            fi
+      if [[ -z ${CONFIG_TOML} ]]; then
+        echo "Using default config.toml"
+        mv $FILES_FOLDER/config.toml.default $FILES_FOLDER/config.toml
+      else
+        echo $CONFIG_TOML > $FILES_FOLDER/config.toml
+      fi
+
+      cd testnet-kitchen/conf/ecs
+
+      terragrunt plan -detailed-exitcode -out ~/plan.output
+      terragrunt apply ~/plan.output
+      rm ~/plan.output
 
 
-executors:
-  terragrunt:
-    docker:
-      - image: *TERRAGRUNT
-    environment:
-      AWS_REGION: us-east-1
+build_env: &build_env
+  docker:
+    - image: *TERRAGRUNT
+  environment:
+    AWS_REGION: us-east-1
 
 jobs:
   build:
-    executor: terragrunt
+    <<: *build_env
     steps:
       - checkout
-      - apply-config
+      - *network
+      - *ecs
 
 workflows:
   version: 2
@@ -48,5 +55,4 @@ workflows:
           filters:
             branches:
               only:
-                - master
                 - mircea/devops184

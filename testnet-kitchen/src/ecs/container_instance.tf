@@ -16,16 +16,14 @@ resource "aws_instance" "container_instance" {
   instance_type          = "t2.xlarge"
   ami                    = "${data.aws_ami.ecs_ami.id}"
   key_name               = "gos-seed"
-  subnet_id              = "${aws_subnet.testnet_private.*.id[0]}"
+  subnet_id              = "${data.terraform_remote_state.network.priv_subnet_id}"
   iam_instance_profile   = "${aws_iam_instance_profile.testnet.id}"
-  vpc_security_group_ids = ["${aws_security_group.instance.id}"]
+  vpc_security_group_ids = ["${data.terraform_remote_state.network.container_instance_sec_grp_id}"]
   user_data              = "${data.template_cloudinit_config.container_instance.rendered}"
 
   tags {
     Name = "Testnet Container Instance"
   }
-
-  depends_on = ["aws_nat_gateway.testnet_container_instance"]
 }
 
 ###############################################################
@@ -61,7 +59,9 @@ write_files:
     - path: /config/config.toml
       permissions: '0644'
       encoding: base64
-      content: ${base64encode(file("files/config.toml"))}
+
+      # file is provided by circleci already base64 encoded
+      content: ${file("files/config.toml")}
 EOF
   }
 
@@ -114,8 +114,8 @@ resource "aws_efs_file_system" "config_files" {
 
 resource "aws_efs_mount_target" "config_files" {
   file_system_id  = "${aws_efs_file_system.config_files.id}"
-  subnet_id       = "${aws_subnet.testnet_private.*.id[0]}"
-  security_groups = ["${aws_security_group.efs_access.id}"]
+  subnet_id       = "${data.terraform_remote_state.network.priv_subnet_id}"
+  security_groups = ["${data.terraform_remote_state.network.efs_sec_grp_id}"]
 }
 
 ###############################################################
