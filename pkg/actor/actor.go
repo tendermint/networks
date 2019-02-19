@@ -25,6 +25,7 @@ type Actor interface {
 
 	Start() error
 	Shutdown()
+	Wait()
 
 	// Lifecycle events
 	OnStart() error
