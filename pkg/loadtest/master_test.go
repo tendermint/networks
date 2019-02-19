@@ -45,9 +45,12 @@ func TestMasterNodeLifecycle(t *testing.T) {
 		t.Fatal("Failed to start master node", err)
 	}
 
+	slave1err := make(chan error)
+	slave2err := make(chan error)
+
 	// mock the interaction between the master and a slave
-	go mockWebSocketsClient(t, cfg.Slave.Master, "slave1")
-	go mockWebSocketsClient(t, cfg.Slave.Master, "slave2")
+	go mockWebSocketsClient(cfg.Slave.Master, "slave1", slave1err)
+	go mockWebSocketsClient(cfg.Slave.Master, "slave2", slave2err)
 
 	done := make(chan struct{})
 	go func() {
@@ -56,6 +59,12 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	}()
 
 	select {
+	case err := <-slave1err:
+		t.Fatal("Slave 1 error", err)
+
+	case err := <-slave2err:
+		t.Fatal("Slave 2 error", err)
+
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Error("Timed out waiting for test to complete")
@@ -66,10 +75,11 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	}
 }
 
-func mockWebSocketsClient(t *testing.T, masterAddr, slaveID string) {
+func mockWebSocketsClient(masterAddr, slaveID string, errc chan error) {
 	c, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("ws://%s", masterAddr), nil)
 	if err != nil {
-		t.Fatal(err)
+		errc <- err
+		return
 	}
 	defer c.Close()
 
@@ -77,27 +87,27 @@ func mockWebSocketsClient(t *testing.T, masterAddr, slaveID string) {
 
 	// first tell the master that we're ready
 	if err := loadtest.WebSocketsSend(c, actor.Message{Type: loadtest.SlaveReady, Data: id}); err != nil {
-		t.Error(err)
+		errc <- err
 		return
 	}
 	// check that we're accepted
 	msg, err := loadtest.WebSocketsRecv(c)
 	if err != nil {
-		t.Error(err)
+		errc <- err
 		return
 	}
 	if msg.Type != loadtest.SlaveAccepted {
-		t.Errorf("Expected response \"%s\", but got \"%s\"", loadtest.SlaveAccepted, msg.Type)
+		errc <- fmt.Errorf("Expected response \"%s\", but got \"%s\"", loadtest.SlaveAccepted, msg.Type)
 	}
 
 	// now wait for the go-ahead for load testing
 	msg, err = loadtest.WebSocketsRecv(c)
 	if err != nil {
-		t.Error(err)
+		errc <- err
 		return
 	}
 	if msg.Type != loadtest.StartLoadTest {
-		t.Errorf("Expected response \"%s\", but got \"%s\"", loadtest.StartLoadTest, msg.Type)
+		errc <- fmt.Errorf("Expected response \"%s\", but got \"%s\"", loadtest.StartLoadTest, msg.Type)
 	}
 
 	//
@@ -105,7 +115,7 @@ func mockWebSocketsClient(t *testing.T, masterAddr, slaveID string) {
 	//
 
 	if err = loadtest.WebSocketsSend(c, actor.Message{Type: loadtest.SlaveFinished, Data: id}); err != nil {
-		t.Error(err)
+		errc <- err
 		return
 	}
 

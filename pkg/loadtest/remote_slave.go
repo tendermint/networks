@@ -30,8 +30,15 @@ func newRemoteSlave(conn *websocket.Conn, master *MasterNode) *remoteSlave {
 }
 
 func (s *remoteSlave) OnStart() error {
+	s.conn.SetCloseHandler(s.connCloseHandler)
 	// tell the master we're up
 	s.Send(s.master, actor.Message{Type: RemoteSlaveStarted})
+	return nil
+}
+
+func (s *remoteSlave) connCloseHandler(code int, text string) error {
+	s.Logger.Infoln("Remote side closed the connection")
+	s.Send(s, actor.Message{Type: ConnectionClosed})
 	return nil
 }
 
@@ -44,6 +51,10 @@ func (s *remoteSlave) OnShutdown() {
 
 func (s *remoteSlave) Handle(msg actor.Message) {
 	switch msg.Type {
+	case ConnectionClosed:
+		// inform the master that the connection was closed
+		s.Send(s.master, msg)
+
 	case RecvMessage:
 		res := s.recvMessage(msg)
 

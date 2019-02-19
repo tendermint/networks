@@ -1,6 +1,8 @@
 package loadtest
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -54,4 +56,12 @@ func webSocketsSend(conn *websocket.Conn, msg actor.Message, timeouts ...time.Du
 
 func webSocketsClose(conn *websocket.Conn) error {
 	return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+}
+
+func ensureWebSocketsAddr(addr string) string {
+	parts := strings.Split(addr, "://")
+	if len(parts) == 1 {
+		return fmt.Sprintf("ws://%s", addr)
+	}
+	return addr
 }

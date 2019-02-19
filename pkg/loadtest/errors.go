@@ -18,6 +18,8 @@ const (
 	ErrSlaveRejected
 	ErrUnsupportedWebSocketsMessageType
 	ErrWebSocketsConnClosed
+	ErrTooManySlaves
+	ErrAlreadySeenSlave
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
@@ -42,7 +44,7 @@ func NewError(code ErrorCode, upstream error, additionalInfo ...string) *Error {
 }
 
 // Error implements error.
-func (e *Error) Error() string {
+func (e Error) Error() string {
 	if e.Upstream != nil {
 		return fmt.Sprintf("%s\nCaused by: %s", e.Message, e.Upstream.Error())
 	}
@@ -74,6 +76,10 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Unsupported WebSockets message type (must be text)"
 	case ErrWebSocketsConnClosed:
 		result = "WebSockets connection closed"
+	case ErrTooManySlaves:
+		result = "Too many slaves connected"
+	case ErrAlreadySeenSlave:
+		result = "Another slave with the same ID is connected to the master"
 	default:
 		return "Unrecognized error"
 	}
@@ -81,4 +87,14 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = fmt.Sprintf("%s: %s", result, additionalInfo[0])
 	}
 	return result
+}
+
+// IsErrorCode is a convenience function that attempts to cast the given error
+// to an Error struct and checks its error code against the given code.
+func IsErrorCode(err error, code ErrorCode) bool {
+	e, ok := err.(Error)
+	if ok {
+		return e.Code == code
+	}
+	return false
 }

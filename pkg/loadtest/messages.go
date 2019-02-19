@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/tendermint/networks/pkg/actor"
 )
@@ -18,14 +19,18 @@ const (
 	AllSlavesReady     actor.MessageType = "all-slaves-ready"
 	StartLoadTest      actor.MessageType = "start-load-test"
 	SlaveFinished      actor.MessageType = "slave-finished"
+	ConnectionClosed   actor.MessageType = "connection-closed"
 )
 
 type SlaveIDMessage struct {
 	ID string `json:"id"`
 }
 
+type RecvMessageConfig struct {
+	Timeout time.Duration `json:"timeout"`
+}
+
 func init() {
-	actor.RegisterMessageParser(RecvMessage, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(RemoteSlaveStarted, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(SlaveReady, ParseSlaveIDMessage)
 	actor.RegisterMessageParser(TooManySlaves, actor.ParseMessageWithNoData)
