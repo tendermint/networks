@@ -1,6 +1,8 @@
 package actor
 
 import (
+	"sync"
+
 	uuid "github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -12,8 +14,8 @@ const (
 
 // Actor is an implementation of the actor pattern.
 type Actor interface {
-	// Retrieves the unique ID of this actor.
 	GetID() string
+	SetID(id string)
 
 	// Primary handler method for dealing with incoming messages to the actor's
 	// inbox.
@@ -45,6 +47,9 @@ type BaseActor struct {
 	inboxChan            chan Message
 	shutdownChan         chan struct{}
 	shutdownCompleteChan chan struct{}
+	shutdownCompleted    bool
+
+	mtx *sync.RWMutex
 }
 
 // NewBaseActor instantiates a BaseActor that can be used to provide the basic
@@ -61,6 +66,8 @@ func NewBaseActor(impl Actor, ctx string) *BaseActor {
 		inboxChan:            make(chan Message, DefaultActorInboxSize),
 		shutdownChan:         make(chan struct{}),
 		shutdownCompleteChan: make(chan struct{}),
+		shutdownCompleted:    false,
+		mtx:                  &sync.RWMutex{},
 	}
 }
 
@@ -110,12 +117,24 @@ func (a *BaseActor) Shutdown() {
 // Wait will block the current goroutine and wait until the actor's shutdown
 // process is complete.
 func (a *BaseActor) Wait() {
-	<-a.shutdownCompleteChan
+	if !a.shutdownCompleted {
+		<-a.shutdownCompleteChan
+		a.shutdownCompleted = true
+	}
 }
 
 // GetID will retrieve the actor's ID, which should be universally unique.
 func (a *BaseActor) GetID() string {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
 	return a.id
+}
+
+// SetID allows us to override the ID of the actor.
+func (a *BaseActor) SetID(id string) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	a.id = id
 }
 
 // Handle will, by default, just check if we have an implementation actor class
