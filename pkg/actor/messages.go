@@ -16,6 +16,9 @@ const (
 	PoisonPill MessageType = "poison-pill"
 )
 
+// MaxDeadLetterMessages puts a maximum size on the dead letter inbox.
+const MaxDeadLetterMessages = 1000
+
 type baseMessage struct {
 	Type MessageType `json:"type"`           // What type of message is this?
 	Data interface{} `json:"data,omitempty"` // The data/contents of the message, if any.
@@ -41,19 +44,38 @@ var messageParserRegistry = &MessageParserRegistry{
 	Parsers: make(map[MessageType]MessageParser),
 }
 
+var deadLetterInbox = make(chan Message, MaxDeadLetterMessages)
+
 func init() {
 	RegisterMessageParser(Ping, ParseMessageWithNoData)
 	RegisterMessageParser(Pong, ParseMessageWithNoData)
 	RegisterMessageParser(PoisonPill, ParseMessageWithNoData)
 }
 
-func (m *Message) String() string {
+// DeadLetterInbox provides access to the global dead letter inbox for
+// undelivered messages.
+func DeadLetterInbox() chan Message {
+	return deadLetterInbox
+}
+
+// RouteToDeadLetterInbox is a convenience function that will route a message to
+// the dead letter inbox unless it's full, in which case it will drop the
+// message.
+func RouteToDeadLetterInbox(msg Message) {
+	select {
+	case deadLetterInbox <- msg:
+	default:
+		// Drop the message because the dead letter inbox is full
+	}
+}
+
+func (m Message) String() string {
 	return fmt.Sprintf("Message{Type: \"%s\", Data: %v, Sender: \"%v\"}", m.Type, m.Data, m.Sender.GetID())
 }
 
 // Error will return an error if the data contained in the message is an error,
 // otherwise it returns nil.
-func (m *Message) Error() error {
+func (m Message) Error() error {
 	if err, ok := m.Data.(error); ok {
 		return err
 	}
@@ -82,12 +104,24 @@ func ParseJSONMessage(s string) (*Message, error) {
 
 // ToJSON is a utility function that assists in converting the message to a JSON
 // string.
-func (m *Message) ToJSON() (string, error) {
+func (m Message) ToJSON() (string, error) {
 	data, err := json.Marshal(baseMessage{Type: m.Type, Data: m.Data})
 	if err != nil {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// Reply is a convenience function that will first check if this message has a
+// sender, and if it does, will pass the given message on to its Recv method. If
+// there is no sender attached to this message, then the message is sent to the
+// dead letter inbox.
+func (m Message) Reply(msg Message) {
+	if m.Sender != nil {
+		m.Sender.Recv(msg)
+	} else {
+		RouteToDeadLetterInbox(msg)
+	}
 }
 
 // RegisterMessageParser registers (adds or overrides) the parser for the given
