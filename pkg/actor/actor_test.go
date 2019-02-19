@@ -1,27 +1,29 @@
-package actor
+package actor_test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/tendermint/networks/pkg/actor"
 )
 
 type testActor struct {
-	*BaseActor
+	*actor.BaseActor
 
-	testChan     chan Message
+	testChan     chan actor.Message
 	startupChan  chan struct{}
 	shutdownChan chan struct{}
 }
 
-var _ Actor = (*testActor)(nil)
+var _ actor.Actor = (*testActor)(nil)
 
 func newTestActor() *testActor {
 	t := &testActor{
-		testChan:     make(chan Message),
+		testChan:     make(chan actor.Message),
 		startupChan:  make(chan struct{}),
 		shutdownChan: make(chan struct{}),
 	}
-	t.BaseActor = NewBaseActor(t, "test")
+	t.BaseActor = actor.NewBaseActor(t, "test")
 	return t
 }
 
@@ -34,9 +36,9 @@ func (t *testActor) OnShutdown() {
 	close(t.shutdownChan)
 }
 
-func (t *testActor) Handle(m Message) {
-	if m.Type == Ping {
-		t.testChan <- Message{Type: Pong}
+func (t *testActor) Handle(m actor.Message) {
+	if m.Type == actor.Ping {
+		t.testChan <- actor.Message{Type: actor.Pong}
 	}
 }
 
@@ -51,11 +53,11 @@ func TestBaseActorLifecycle(t *testing.T) {
 		t.Fatal("Timed out waiting for actor to call OnStart()")
 	}
 
-	a.Recv(Message{Type: Ping})
+	a.Recv(actor.Message{Type: actor.Ping})
 
 	select {
 	case m := <-a.testChan:
-		if m.Type == Pong {
+		if m.Type == actor.Pong {
 			t.Log("Successfully received anticipated pong message")
 		} else {
 			t.Fatalf("Unrecognized message type: %s", m.Type)
@@ -91,7 +93,7 @@ func TestPoisonPill(t *testing.T) {
 	a := newTestActor()
 	a.Start()
 
-	a.Recv(Message{Type: PoisonPill})
+	a.Recv(actor.Message{Type: actor.PoisonPill})
 
 	done := make(chan struct{})
 	go func() {
