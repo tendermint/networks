@@ -55,7 +55,7 @@ func NewTestHarness(parent *SlaveNode, clientFactory TestHarnessClientFactory) *
 		clients:             make(map[string]*TestHarnessClient),
 		mtx:                 &sync.RWMutex{},
 	}
-	th.BaseActor = actor.NewBaseActor(th, "test-harness")
+	th.BaseActor = actor.NewBaseActor(th, "test-harness", inboxSize)
 	return th
 }
 

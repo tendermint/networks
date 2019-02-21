@@ -51,7 +51,7 @@ func (s *WebSocketsServer) OnStart() error {
 	http.HandleFunc("/", s.transportHandler)
 
 	go func(s_ *WebSocketsServer) {
-		http.ListenAndServe(s_.bindAddr, nil)
+		s_.Logger.WithError(http.ListenAndServe(s_.bindAddr, nil)).Infoln("WebSockets server shut down")
 	}(s)
 
 	return nil
@@ -76,5 +76,7 @@ func (s *WebSocketsServer) transportHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// wait for the client to terminate
-	client.Wait()
+	if err = client.Wait(); err != nil {
+		s.Logger.WithError(err).Errorln("Failed when waiting for client to shut down")
+	}
 }

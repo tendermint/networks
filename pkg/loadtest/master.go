@@ -176,18 +176,23 @@ func (n *MasterNode) waitForSlaves() {
 	for _, rs := range n.remoteSlaves {
 		slaves = append(slaves, rs)
 	}
-	done := make(chan struct{})
+	done := make(chan error, len(slaves))
 	go func(slaves_ []actor.Actor) {
-		defer close(done)
 		for _, rs := range slaves_ {
-			rs.Wait()
+			done <- rs.Wait()
 		}
 	}(slaves)
 
-	select {
-	case <-done:
-	case <-time.After(RemoteSlaveWaitTimeout):
-		n.Logger.Errorln("Waited long enough for all slaves to shut down")
+	// wait for all of the slaves to shut down
+	for i := 0; i < len(slaves); i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				n.Logger.WithError(err).Errorln("Slave failed to shut down properly")
+			}
+		case <-time.After(RemoteSlaveWaitTimeout):
+			n.Logger.Errorln("Waited long enough for all slaves to shut down")
+		}
 	}
 }
 

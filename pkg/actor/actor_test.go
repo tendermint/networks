@@ -45,7 +45,9 @@ func (t *testActor) Handle(m actor.Message) {
 
 func TestBaseActorLifecycle(t *testing.T) {
 	a := newTestActor()
-	a.Start()
+	if err := a.Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	select {
 	case <-a.startupChan:
@@ -69,10 +71,9 @@ func TestBaseActorLifecycle(t *testing.T) {
 	}
 
 	a.Shutdown()
-	done := make(chan struct{})
+	done := make(chan error)
 	go func() {
-		a.Wait()
-		close(done)
+		done <- a.Wait()
 	}()
 
 	select {
@@ -83,8 +84,12 @@ func TestBaseActorLifecycle(t *testing.T) {
 	}
 
 	select {
-	case <-done:
-		t.Log("Successfully shut down actor event loop")
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		} else {
+			t.Log("Successfully shut down actor event loop")
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timed out waiting for test actor to shut down")
 	}
@@ -92,19 +97,24 @@ func TestBaseActorLifecycle(t *testing.T) {
 
 func TestPoisonPill(t *testing.T) {
 	a := newTestActor()
-	a.Start()
+	if err := a.Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	a.Recv(actor.Message{Type: actor.PoisonPill})
 
-	done := make(chan struct{})
+	done := make(chan error)
 	go func() {
-		a.Wait()
-		close(done)
+		done <- a.Wait()
 	}()
 
 	select {
-	case <-done:
-		t.Log("Successfully poisoned actor and triggered shutdown")
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		} else {
+			t.Log("Successfully poisoned actor and triggered shutdown")
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timed out waiting for poison pill to kill actor")
 	}

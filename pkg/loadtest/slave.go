@@ -132,11 +132,11 @@ func (n *SlaveNode) setState(newState SlaveState) {
 	n.Logger.WithField("state", newState).Debugln("Slave state changed")
 }
 
-func (n *SlaveNode) getState() SlaveState {
-	n.mtx.RLock()
-	defer n.mtx.RUnlock()
-	return n.state
-}
+// func (n *SlaveNode) getState() SlaveState {
+// 	n.mtx.RLock()
+// 	defer n.mtx.RUnlock()
+// 	return n.state
+// }
 
 func (n *SlaveNode) errorAndShutdown(err ErrorCode) {
 	n.Logger.Errorln(ErrorMessageForCode(err))

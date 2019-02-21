@@ -20,7 +20,9 @@ func webSocketsRecv(conn *websocket.Conn, timeouts ...time.Duration) (*actor.Mes
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	conn.SetReadDeadline(time.Now().Add(timeout))
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
 
 	mt, r, err := conn.ReadMessage()
 	if err != nil {
@@ -44,7 +46,9 @@ func webSocketsSend(conn *websocket.Conn, msg actor.Message, timeouts ...time.Du
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	conn.SetWriteDeadline(time.Now().Add(timeout))
+	if err := conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		return err
+	}
 
 	data, err := msg.ToJSON()
 	if err != nil {

@@ -80,9 +80,10 @@ func NewSummaryStats(timeout time.Duration) *SummaryStats {
 
 // Add will add a new interaction time (milliseconds) and perform the relevant
 // calculations.
-func (i *SummaryStats) Add(t int64, errs ...error) error {
+func (i *SummaryStats) Add(t int64, errs ...error) {
+	// cap the value at the timeout
 	if t > i.timeout {
-		return NewError(ErrLongerThanTimeout, nil)
+		t = i.timeout
 	}
 
 	if i.Count == 0 {
@@ -113,13 +114,12 @@ func (i *SummaryStats) Add(t int64, errs ...error) error {
 	if bin < i.binCount {
 		i.TimeBins[bin]++
 	}
-	return nil
 }
 
 // AddNano calls Add assuming that the given time is in nanoseconds, and thus
 // needs to be divided by 1000 before being added.
-func (i *SummaryStats) AddNano(t int64, errs ...error) error {
-	return i.Add(t/1000, errs...)
+func (i *SummaryStats) AddNano(t int64, errs ...error) {
+	i.Add(t/1000, errs...)
 }
 
 // TimeAndAdd executes the given function, tracking how long it takes to

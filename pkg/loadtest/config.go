@@ -24,8 +24,6 @@ type MasterConfig struct {
 	Bind         string // The address to which to bind the master (host:port).
 	ExpectSlaves int    // The number of slaves to expect to connect before starting the load test.
 	ResultsDir   string // The root of the results output directory.
-
-	configName string // This is extracted from the filename of the configuration file.
 }
 
 // SlaveConfig provides configuration specific to the load testing slaves.

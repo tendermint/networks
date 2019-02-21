@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 )
 
@@ -25,8 +24,6 @@ type KVStoreHTTPInteractor struct {
 	counter   int
 
 	stats map[string]*SummaryStats
-
-	mtx *sync.RWMutex
 }
 
 type abciQueryHTTPResponse struct {

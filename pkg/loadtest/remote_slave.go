@@ -98,11 +98,11 @@ func (s *remoteSlave) Handle(msg actor.Message) {
 	}
 }
 
-func (s *remoteSlave) getState() SlaveState {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-	return s.state
-}
+// func (s *remoteSlave) getState() SlaveState {
+// 	s.mtx.RLock()
+// 	defer s.mtx.RUnlock()
+// 	return s.state
+// }
 
 func (s *remoteSlave) setState(newState SlaveState) {
 	s.Logger.WithField("state", newState).Debugln("Remote slave changing state")
@@ -121,20 +121,6 @@ func (s *remoteSlave) recvMessage(src actor.Message) *actor.Message {
 		src.Reply(*res)
 	}
 	return res
-}
-
-// recvAllMessages will attempt to read all messages from the connection until
-// it encounters an error.
-func (s *remoteSlave) recvAllMessages(src actor.Message) []*actor.Message {
-	var msgs []*actor.Message
-	for {
-		msg := s.recvMessage(src)
-		if msg == nil {
-			break
-		}
-		msgs = append(msgs, msg)
-	}
-	return msgs
 }
 
 func (s *remoteSlave) sendMessage(msg actor.Message) {
