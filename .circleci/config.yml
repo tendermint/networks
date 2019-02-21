@@ -8,7 +8,7 @@ defaults: &defaults
     GOBIN: /tmp/workspace/bin
 
 jobs:
-  install_dependencies:
+  setup_dependencies:
     <<: *defaults
     steps:
       - run: mkdir -p /tmp/workspace/bin
@@ -59,3 +59,15 @@ jobs:
           commands: |
             export PATH="${GOBIN}:${PATH}"
             make test
+
+workflows:
+  version: 2
+  test-suite:
+    jobs:
+      - setup_dependencies
+      - lint:
+          requires:
+            - setup_dependencies
+      - test:
+          requires:
+            - setup_dependencies
