@@ -1,0 +1,61 @@
+version: 2
+
+defaults: &defaults
+  working_directory: /go/src/github.com/tendermint/networks
+  docker:
+    - image: circleci/golang:1.11.4
+  environment:
+    GOBIN: /tmp/workspace/bin
+
+jobs:
+  install_dependencies:
+    <<: *defaults
+    steps:
+      - run: mkdir -p /tmp/workspace/bin
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-pkg-cache
+      - run:
+          name: get dependencies
+          command: |
+            export PATH="${GOBIN}:${PATH}"
+            make get-deps
+      - save_cache:
+          key: v1-pkg-cache
+          paths:
+            - /go/pkg
+      - save_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+          paths:
+            - /go/src/github.com/tendermint/networks
+
+  lint:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - restore_cache:
+          key: v1-pkg-cache
+      - restore_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: lint
+          commands: |
+            export PATH="${GOBIN}:${PATH}"
+            make lint
+
+  test:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - restore_cache:
+          key: v1-pkg-cache
+      - restore_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: test
+          commands: |
+            export PATH="${GOBIN}:${PATH}"
+            make test
