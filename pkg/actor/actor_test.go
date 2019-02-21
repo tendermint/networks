@@ -32,8 +32,9 @@ func (t *testActor) OnStart() error {
 	return nil
 }
 
-func (t *testActor) OnShutdown() {
+func (t *testActor) OnShutdown() error {
 	close(t.shutdownChan)
+	return nil
 }
 
 func (t *testActor) Handle(m actor.Message) {

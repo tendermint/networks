@@ -25,7 +25,7 @@ func newRemoteSlave(conn *websocket.Conn, master *MasterNode) *remoteSlave {
 		state:  SlaveStarting,
 		mtx:    &sync.RWMutex{},
 	}
-	s.BaseActor = actor.NewBaseActor(s, "remoteSlave")
+	s.BaseActor = actor.NewBaseActor(s, "remote-slave")
 	return s
 }
 
@@ -42,11 +42,13 @@ func (s *remoteSlave) connCloseHandler(code int, text string) error {
 	return nil
 }
 
-func (s *remoteSlave) OnShutdown() {
+func (s *remoteSlave) OnShutdown() error {
 	// try to close the websockets connection
 	if err := webSocketsClose(s.conn); err != nil {
 		s.Logger.WithError(err).Errorln("Failed to send WebSockets close message")
+		return err
 	}
+	return nil
 }
 
 func (s *remoteSlave) Handle(msg actor.Message) {

@@ -24,7 +24,7 @@ func newRemoteMaster(addr string, slave *SlaveNode) *remoteMaster {
 		conn:  nil,
 		slave: slave,
 	}
-	m.BaseActor = actor.NewBaseActor(m, "remoteMaster")
+	m.BaseActor = actor.NewBaseActor(m, "remote-master")
 	return m
 }
 

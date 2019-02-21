@@ -16,11 +16,15 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: loadtest.DefaultWebSocketsWriteBufSize,
 }
 
+func noopClientFactory(th *loadtest.TestHarness) *loadtest.TestHarnessClient {
+	return loadtest.NewTestHarnessClient(th, &loadtest.NoopInteractor{})
+}
+
 func TestSlaveNodeLifecycle(t *testing.T) {
 	cfg := testConfig()
 	cfg.Master.ExpectSlaves = 1
 
-	slave := loadtest.NewSlaveNode(cfg)
+	slave := loadtest.NewSlaveNode(cfg, noopClientFactory)
 
 	errc := make(chan error)
 	go mockMasterNode(cfg.Master.Bind, slave.GetID(), errc)
@@ -29,17 +33,19 @@ func TestSlaveNodeLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	done := make(chan struct{})
+	done := make(chan error)
 	go func() {
-		slave.Wait()
-		close(done)
+		done <- slave.Wait()
 	}()
 
 	select {
 	case err := <-errc:
 		t.Error(err)
 
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		}
 
 	case <-time.After(5 * time.Second):
 		t.Error("Timed out waiting for slave lifecycle to complete")

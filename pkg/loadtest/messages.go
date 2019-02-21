@@ -20,6 +20,13 @@ const (
 	StartLoadTest      actor.MessageType = "start-load-test"
 	SlaveFinished      actor.MessageType = "slave-finished"
 	ConnectionClosed   actor.MessageType = "connection-closed"
+
+	SpawnClients         actor.MessageType = "spawn-clients"
+	ClientFailed         actor.MessageType = "client-failed"
+	ClientFailedShutdown actor.MessageType = "client-failed-shutdown"
+	ClientFinished       actor.MessageType = "client-finished"
+	ClientStats          actor.MessageType = "client-stats"
+	TestHarnessFinished  actor.MessageType = "test-harness-finished"
 )
 
 type SlaveIDMessage struct {
@@ -28,6 +35,15 @@ type SlaveIDMessage struct {
 
 type RecvMessageConfig struct {
 	Timeout time.Duration `json:"timeout"`
+}
+
+type ClientIDMessage struct {
+	ID string
+}
+
+type ClientStatsMessage struct {
+	ID    string
+	Stats ClientSummaryStats
 }
 
 func init() {

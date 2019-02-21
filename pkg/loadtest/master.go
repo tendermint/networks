@@ -33,7 +33,6 @@ type MasterNode struct {
 	recvTicker      *time.Ticker           // To keep checking for updates from the slaves.
 	recvTickerStop  chan struct{}          // To kill the recv checker.
 	finishedCount   int                    // To keep track of how many slaves have successfully completed their load testing.
-	shutdownErr     error                  // An error to pass back to the command line, if any.
 	mtx             *sync.RWMutex
 }
 
@@ -51,13 +50,15 @@ func NewMasterNode(cfg *Config) *MasterNode {
 		recvTicker:      nil,
 		recvTickerStop:  make(chan struct{}),
 		finishedCount:   0,
-		shutdownErr:     nil,
 		mtx:             &sync.RWMutex{},
 	}
 	n.BaseActor = actor.NewBaseActor(n, "master")
 	return n
 }
 
+// OnStart will start the WebSockets server and the readiness check loop, which
+// keeps checking whether all slaves have connected and the load testing is
+// ready to begin.
 func (n *MasterNode) OnStart() error {
 	n.wss = NewWebSocketsServer(n.cfg.Master.Bind, n.wsClientFactory)
 	if err := n.wss.Start(); err != nil {
@@ -70,9 +71,14 @@ func (n *MasterNode) OnStart() error {
 	return nil
 }
 
-func (n *MasterNode) OnShutdown() {
+// OnShutdown will stop the WebSockets server and any tickers that are still
+// currently running.
+func (n *MasterNode) OnShutdown() error {
+	var err error
+
 	if n.wss != nil {
 		n.wss.Shutdown()
+		err = n.wss.Wait()
 	}
 	if n.readyTicker != nil {
 		n.readyTicker.Stop()
@@ -81,12 +87,8 @@ func (n *MasterNode) OnShutdown() {
 		close(n.recvTickerStop)
 		n.recvTicker.Stop()
 	}
-}
 
-// GetShutdownError will retrieve any error that occurred during the master
-// node's lifecycle.
-func (n *MasterNode) GetShutdownError() error {
-	return n.shutdownErr
+	return err
 }
 
 // Handle will interpret incoming messages in the master's event loop.
@@ -157,7 +159,6 @@ func (n *MasterNode) slaveFailed(msg actor.Message) {
 
 func (n *MasterNode) failAllSlaves() {
 	n.Logger.Infoln("Informing all slaves of failure")
-	n.shutdownErr = NewError(ErrSlaveFailed, nil)
 
 	// tell all the slaves that one of them failed
 	n.broadcast(actor.Message{Type: SlaveFailed})
@@ -166,7 +167,7 @@ func (n *MasterNode) failAllSlaves() {
 	n.waitForSlaves()
 
 	// shut down the master too
-	n.Shutdown()
+	n.FailAndShutdown(NewError(ErrSlaveFailed, nil))
 }
 
 func (n *MasterNode) waitForSlaves() {
@@ -287,7 +288,6 @@ func (n *MasterNode) slaveFinished(msg actor.Message) {
 	n.finishedCount++
 	if n.finishedCount >= n.cfg.Master.ExpectSlaves {
 		n.Logger.Infoln("All slaves successfully completed load testing")
-		n.shutdownErr = nil
 		n.Shutdown()
 	}
 }

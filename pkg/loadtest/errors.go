@@ -11,6 +11,7 @@ const (
 	NoError ErrorCode = iota
 	ErrFailedToDecodeConfig
 	ErrFailedToReadConfigFile
+	ErrInvalidConfig
 	ErrUnrecognizedWebSocketsMessage
 	ErrUnrecognizedReactorMessageType
 	ErrSlaveFailed
@@ -20,6 +21,12 @@ const (
 	ErrWebSocketsConnClosed
 	ErrTooManySlaves
 	ErrAlreadySeenSlave
+	ErrClientFailed
+	ErrLongerThanTimeout
+	ErrFailedToStartTestHarness
+
+	ErrKVStoreClientPutFailed
+	ErrKVStoreClientGetFailed
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
@@ -80,6 +87,18 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Too many slaves connected"
 	case ErrAlreadySeenSlave:
 		result = "Another slave with the same ID is connected to the master"
+	case ErrClientFailed:
+		result = "Load testing client failed"
+	case ErrLongerThanTimeout:
+		result = "Time given is longer than timeout"
+	case ErrFailedToStartTestHarness:
+		result = "Failed to start test harness"
+	case ErrInvalidConfig:
+		result = "Invalid configuration"
+	case ErrKVStoreClientPutFailed:
+		result = "KVStore client \"put\" request failed"
+	case ErrKVStoreClientGetFailed:
+		result = "KVStore client \"get\" request failed"
 	default:
 		return "Unrecognized error"
 	}

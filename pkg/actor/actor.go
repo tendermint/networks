@@ -26,12 +26,13 @@ type Actor interface {
 	Recv(m Message)
 
 	Start() error
+	FailAndShutdown(err error)
 	Shutdown()
-	Wait()
+	Wait() error
 
 	// Lifecycle events
 	OnStart() error
-	OnShutdown()
+	OnShutdown() error
 }
 
 var _ Actor = (*BaseActor)(nil)
@@ -50,31 +51,42 @@ type BaseActor struct {
 	shutdownCompleteChan chan struct{}
 	shutdownStarted      bool
 	shutdownCompleted    bool
+	shutdownErr          error
 
 	mtx *sync.RWMutex
 }
 
 // NewBaseActor instantiates a BaseActor that can be used to provide the basic
-// event handling functionality.
-func NewBaseActor(impl Actor, ctx string) *BaseActor {
+// event handling functionality. The `inboxSizes` variable is optional, and if
+// not specified the actor's inbox will default to `DefaultActorInboxSize`.
+func NewBaseActor(impl Actor, ctx string, inboxSizes ...int) *BaseActor {
+	inboxSize := DefaultActorInboxSize
+	if len(inboxSizes) > 0 {
+		inboxSize = inboxSizes[0]
+	}
 	id := uuid.NewV4().String()
 	a := &BaseActor{
 		impl:                 impl,
 		ctx:                  ctx,
 		id:                   id,
 		Logger:               makeActorLogger(ctx, id),
-		inboxChan:            make(chan Message, DefaultActorInboxSize),
+		inboxChan:            make(chan Message, inboxSize),
 		shutdownChan:         make(chan struct{}),
 		shutdownCompleteChan: make(chan struct{}),
 		shutdownStarted:      false,
 		shutdownCompleted:    false,
+		shutdownErr:          nil,
 		mtx:                  &sync.RWMutex{},
 	}
 	return a
 }
 
+// OnStart is called prior to starting the actor's internal event loop.
 func (a *BaseActor) OnStart() error { return nil }
-func (a *BaseActor) OnShutdown()    {}
+
+// OnShutdown is called when Shutdown is called. If OnShutdown returns an error,
+// this will override any other error set by FailAndShutdown.
+func (a *BaseActor) OnShutdown() error { return nil }
 
 // Start will initiate this actor's event loop in a separate goroutine. If the
 // impl.OnStart method fails, the error will be returned and the event loop will
@@ -106,13 +118,34 @@ loop:
 	close(a.shutdownCompleteChan)
 }
 
+// FailAndShutdown allows us to shut the actor down with the given error. This
+// helps to understand why exactly an actor shut down.
+func (a *BaseActor) FailAndShutdown(err error) {
+	a.setShutdownErr(err)
+	a.Shutdown()
+}
+
+func (a *BaseActor) setShutdownErr(err error) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	a.shutdownErr = err
+}
+
+func (a *BaseActor) getShutdownErr() error {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+	return a.shutdownErr
+}
+
 // Shutdown initiates the shutdown process (asynchronously) for this actor. If
 // you want to know once the shutdown process is complete, use the Wait()
 // function.
 func (a *BaseActor) Shutdown() {
 	if !a.isShutdownStarted() {
 		if a.impl != nil {
-			a.impl.OnShutdown()
+			if err := a.impl.OnShutdown(); err != nil {
+				a.setShutdownErr(err)
+			}
 		}
 		close(a.shutdownChan)
 		a.setShutdownStarted(true)
@@ -121,11 +154,12 @@ func (a *BaseActor) Shutdown() {
 
 // Wait will block the current goroutine and wait until the actor's shutdown
 // process is complete.
-func (a *BaseActor) Wait() {
+func (a *BaseActor) Wait() error {
 	if !a.isShutdownCompleted() {
 		<-a.shutdownCompleteChan
 		a.setShutdownCompleted(true)
 	}
+	return a.getShutdownErr()
 }
 
 func (a *BaseActor) isShutdownStarted() bool {
@@ -171,11 +205,8 @@ func (a *BaseActor) SetID(id string) {
 // Handle will, by default, just check if we have an implementation actor class
 // and calls that implementation's Handle method.
 func (a *BaseActor) Handle(m Message) {
-	a.Logger.WithField("m", m).Debugln("Got incoming message")
-
 	switch m.Type {
 	case PoisonPill:
-		a.Logger.Debugln("Got poison pill, shutting down")
 		a.Shutdown()
 
 	default:
@@ -188,7 +219,6 @@ func (a *BaseActor) Handle(m Message) {
 // Recv allows BaseActor to queue an incoming message to be handled by its event
 // loop.
 func (a *BaseActor) Recv(msg Message) {
-	a.Logger.WithField("msg", msg).Debugln("Recv")
 	a.inboxChan <- msg
 }
 
@@ -197,10 +227,6 @@ func (a *BaseActor) Recv(msg Message) {
 func (a *BaseActor) Send(other Actor, msg Message) {
 	msg.Sender = a
 	if other != nil {
-		a.Logger.WithFields(logrus.Fields{
-			"msg":   msg,
-			"other": other.GetID(),
-		}).Debugln("Sending message to actor")
 		other.Recv(msg)
 	} else {
 		RouteToDeadLetterInbox(msg)

@@ -21,6 +21,13 @@ func testConfig() *loadtest.Config {
 		Slave: loadtest.SlaveConfig{
 			Master: masterAddr,
 		},
+		Clients: loadtest.ClientConfig{
+			Type:            "noop",
+			Spawn:           1,
+			SpawnRate:       1,
+			MaxInteractions: 1,
+			MaxTestTime:     loadtest.ParseableDuration(1 * time.Minute),
+		},
 	}
 }
 
@@ -52,10 +59,9 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	go mockWebSocketsClient(cfg.Slave.Master, "slave1", slave1err)
 	go mockWebSocketsClient(cfg.Slave.Master, "slave2", slave2err)
 
-	done := make(chan struct{})
+	done := make(chan error)
 	go func() {
-		master.Wait()
-		close(done)
+		done <- master.Wait()
 	}()
 
 	select {
@@ -65,13 +71,13 @@ func TestMasterNodeLifecycle(t *testing.T) {
 	case err := <-slave2err:
 		t.Fatal("Slave 2 error", err)
 
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		}
+
 	case <-time.After(10 * time.Second):
 		t.Error("Timed out waiting for test to complete")
-	}
-
-	if err := master.GetShutdownError(); err != nil {
-		t.Error(err)
 	}
 }
 

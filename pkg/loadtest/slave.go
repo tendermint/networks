@@ -33,39 +33,41 @@ const (
 type SlaveNode struct {
 	*actor.BaseActor
 
-	cfg    *Config       // Overall load test configuration.
-	master *remoteMaster // The remote master node to which this slave is connected.
-	state  SlaveState    // The current state of this slave node.
-	mtx    *sync.RWMutex
+	cfg         *Config       // Overall load test configuration.
+	master      *remoteMaster // The remote master node to which this slave is connected.
+	testHarness *TestHarness  // The test harness we will be using for testing.
+	state       SlaveState    // The current state of this slave node.
+
+	mtx *sync.RWMutex
 
 	startCheckTicker *time.Ticker
 	startCheckChan   chan struct{}
-
-	shutdownErr error // An error to provide if the slave node shuts down improperly.
 }
 
 // NewSlaveNode instantiates a new slave node, but does not start the actor.
-func NewSlaveNode(cfg *Config) *SlaveNode {
+func NewSlaveNode(cfg *Config, clientFactory TestHarnessClientFactory) *SlaveNode {
 	n := &SlaveNode{
 		cfg:              cfg,
+		testHarness:      nil,
 		master:           nil,
 		state:            SlaveStarting,
 		mtx:              &sync.RWMutex{},
 		startCheckTicker: nil,
 		startCheckChan:   make(chan struct{}),
-		shutdownErr:      nil,
 	}
 	n.master = newRemoteMaster(cfg.Slave.Master, n)
+	n.testHarness = NewTestHarness(n, clientFactory)
 	n.BaseActor = actor.NewBaseActor(n, "slave")
 	return n
 }
 
+// OnStart will connect to the master and tell the master that this slave is
+// ready.
 func (n *SlaveNode) OnStart() error {
 	n.setState(SlaveConnecting)
 	if err := n.master.Start(); err != nil {
 		n.Logger.WithError(err).Errorln("Failed to connect to remote master")
 		n.setState(SlaveFailing)
-		n.shutdownErr = err
 		return err
 	}
 	// indicate to the remote master that this slave is ready
@@ -73,19 +75,15 @@ func (n *SlaveNode) OnStart() error {
 	return nil
 }
 
-func (n *SlaveNode) OnShutdown() {
+// OnShutdown will stop any tickers and close the connection to the remote
+// master.
+func (n *SlaveNode) OnShutdown() error {
 	if n.startCheckTicker != nil {
 		n.startCheckTicker.Stop()
 		close(n.startCheckChan)
 	}
 	n.master.Shutdown()
-	n.master.Wait()
-}
-
-// GetShutdownError will retrieve any error that occurred during the slave
-// node's lifecycle.
-func (n *SlaveNode) GetShutdownError() error {
-	return n.shutdownErr
+	return n.master.Wait()
 }
 
 // Handle is the primary handler for incoming messages.
@@ -100,9 +98,9 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 	case StartLoadTest:
 		n.startLoadTesting()
 
-	case SlaveFinished:
-		n.Send(n.master, msg)
-		n.shutdownErr = nil
+	case TestHarnessFinished:
+		n.Logger.Infoln("Test harness finished load testing")
+		n.Send(n.master, actor.Message{Type: SlaveFinished, Data: SlaveIDMessage{ID: n.GetID()}})
 		n.Shutdown()
 
 	case TooManySlaves:
@@ -143,8 +141,7 @@ func (n *SlaveNode) getState() SlaveState {
 func (n *SlaveNode) errorAndShutdown(err ErrorCode) {
 	n.Logger.Errorln(ErrorMessageForCode(err))
 	n.setState(SlaveFailing)
-	n.shutdownErr = NewError(err, nil)
-	n.Shutdown()
+	n.FailAndShutdown(NewError(err, nil))
 }
 
 func (n *SlaveNode) slaveAccepted(src actor.Message) {
@@ -178,8 +175,12 @@ func (n *SlaveNode) startLoadTesting() {
 	}
 	n.Logger.Infoln("Starting load testing")
 
-	// TODO: Load testing here
+	// start the test harness
+	if err := n.testHarness.Start(); err != nil {
+		n.Logger.WithError(err).Errorln("Failed to start test harness")
+		n.FailAndShutdown(NewError(ErrFailedToStartTestHarness, err))
+		return
+	}
 
-	n.Logger.Infoln("Load testing complete")
-	n.Send(n, actor.Message{Type: SlaveFinished, Data: SlaveIDMessage{ID: n.GetID()}})
+	n.Logger.Infoln("Test harness started")
 }
