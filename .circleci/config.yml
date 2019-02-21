@@ -17,7 +17,7 @@ jobs:
           keys:
             - v1-pkg-cache
       - run:
-          name: get dependencies
+          name: Get dependencies
           command: |
             export PATH="${GOBIN}:${PATH}"
             make get-deps
@@ -40,8 +40,8 @@ jobs:
       - restore_cache:
           key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
       - run:
-          name: lint
-          commands: |
+          name: Lint
+          command: |
             export PATH="${GOBIN}:${PATH}"
             make lint
 
@@ -55,8 +55,8 @@ jobs:
       - restore_cache:
           key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
       - run:
-          name: test
-          commands: |
+          name: Test
+          command: |
             export PATH="${GOBIN}:${PATH}"
             make test
 
