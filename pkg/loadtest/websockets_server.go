@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +23,8 @@ type WebSocketsClientFactory func(*websocket.Conn) (actor.Actor, error)
 type WebSocketsServer struct {
 	*actor.BaseActor
 
+	mux           *http.ServeMux
+	httpServer    *http.Server
 	bindAddr      string // The network address to which we must bind.
 	clientFactory WebSocketsClientFactory
 }
@@ -38,6 +41,7 @@ var upgrader = websocket.Upgrader{
 // WebSockets server.
 func NewWebSocketsServer(bindAddr string, clientFactory WebSocketsClientFactory) *WebSocketsServer {
 	s := &WebSocketsServer{
+		httpServer:    nil,
 		bindAddr:      bindAddr,
 		clientFactory: clientFactory,
 	}
@@ -48,12 +52,29 @@ func NewWebSocketsServer(bindAddr string, clientFactory WebSocketsClientFactory)
 // OnStart will fire up the WebSockets server in a separate goroutine to listen
 // for, and handle, incoming connections.
 func (s *WebSocketsServer) OnStart() error {
-	http.HandleFunc("/", s.transportHandler)
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/", s.transportHandler)
+	s.httpServer = &http.Server{
+		Addr:    s.bindAddr,
+		Handler: s.mux,
+	}
 
 	go func(s_ *WebSocketsServer) {
-		s_.Logger.WithError(http.ListenAndServe(s_.bindAddr, nil)).Infoln("WebSockets server shut down")
+		if err := s_.httpServer.ListenAndServe(); err != nil {
+			s_.Logger.WithError(err).Infoln("WebSockets server shut down")
+		}
 	}(s)
 
+	return nil
+}
+
+// OnShutdown will attempt to cleanly shut down the WebSockets server.
+func (s *WebSocketsServer) OnShutdown() error {
+	if err := s.httpServer.Shutdown(context.Background()); err != nil {
+		s.Logger.WithError(err).Errorln("Failed to cleanly shut down WebSockets server")
+	} else {
+		s.Logger.Infoln("WebSockets server successfully shut down")
+	}
 	return nil
 }
 
