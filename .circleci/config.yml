@@ -49,8 +49,4 @@ workflows:
   version: 2
   iam_and_roles_config:
     jobs:
-      - build:
-          filters:
-            branches:
-              only:
-                - mircea/devops184
+      - build
