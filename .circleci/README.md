@@ -8,4 +8,5 @@ curl --silent \\
 ```
 Ensure that `BASE_64_ENCODED_FILE`, `GIT_BRANCH` and `CIRCLECI_API_TOKEN` are replaced with appropriate values
 
-Manage / obtain a [CircleCI token](https://circleci.com/docs/2.0/managing-api-tokens/)
+* Manage / obtain a [CircleCI token](https://circleci.com/docs/2.0/managing-api-tokens/)
+* The `moniker` and the `persistent_peers` keys need to be omitted from the `config.toml` file.
