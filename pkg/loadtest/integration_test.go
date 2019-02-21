@@ -115,7 +115,7 @@ func TestFullIntegrationHTTPKVStore(t *testing.T) {
 		select {
 		case <-tm1donec:
 		case <-tm2donec:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Error("Timed out waiting for mock HTTP servers to shut down")
 		}
 	}
