@@ -53,7 +53,7 @@ func TestSlaveNodeLifecycle(t *testing.T) {
 			t.Error(err)
 		}
 
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Error("Timed out waiting for slave lifecycle to complete")
 	}
 }

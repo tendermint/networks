@@ -33,6 +33,11 @@ type SlaveIDMessage struct {
 	ID string `json:"id"`
 }
 
+type SlaveFinishedMessage struct {
+	ID    string `json:"id"`
+	Stats ClientSummaryStats
+}
+
 type RecvMessageConfig struct {
 	Timeout time.Duration `json:"timeout"`
 }
@@ -43,7 +48,7 @@ type ClientIDMessage struct {
 
 type ClientStatsMessage struct {
 	ID    string
-	Stats ClientSummaryStats
+	Stats *ClientSummaryStats
 }
 
 func init() {
@@ -55,11 +60,19 @@ func init() {
 	actor.RegisterMessageParser(SlaveFailed, ParseSlaveIDMessage)
 	actor.RegisterMessageParser(AllSlavesReady, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(StartLoadTest, actor.ParseMessageWithNoData)
-	actor.RegisterMessageParser(SlaveFinished, ParseSlaveIDMessage)
+	actor.RegisterMessageParser(SlaveFinished, ParseSlaveFinishedMessage)
 }
 
 func ParseSlaveIDMessage(data json.RawMessage) (interface{}, error) {
 	msg := SlaveIDMessage{}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+func ParseSlaveFinishedMessage(data json.RawMessage) (interface{}, error) {
+	msg := SlaveFinishedMessage{}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return nil, err
 	}

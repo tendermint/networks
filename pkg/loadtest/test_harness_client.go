@@ -38,8 +38,11 @@ type TestHarnessClientInteractor interface {
 	// request statistics (one for each request performed during an
 	// interaction). Each request must be named, where the keys of the map
 	// returned must be a unique identifier for the request.
-	//Interact() map[string]RequestStats
 	Interact()
+
+	// GetStats must return a mapping of request IDs to summary statistics for
+	// each of those requests.
+	GetStats() map[string]*SummaryStats
 
 	// Shutdown allows the interactor to clean up as the client is being shut
 	// down.
@@ -118,9 +121,9 @@ loop:
 
 		// periodically report back on stats
 		if ((istats.Count + 1) % ClientStatsReportingFrequency) == 0 {
-			stats := ClientSummaryStats{
-				Interactions: *istats,
-				Requests:     SummaryStats{},
+			stats := &ClientSummaryStats{
+				Interactions: &(*istats),
+				Requests:     c.interactor.GetStats(),
 			}
 			c.Send(c, actor.Message{Type: ClientStats, Data: ClientStatsMessage{ID: c.GetID(), Stats: stats}})
 		}
@@ -134,9 +137,9 @@ loop:
 		}
 	}
 
-	stats := ClientSummaryStats{
-		Interactions: *istats,
-		Requests:     SummaryStats{},
+	stats := &ClientSummaryStats{
+		Interactions: &(*istats),
+		Requests:     c.interactor.GetStats(),
 	}
 
 	if completed {

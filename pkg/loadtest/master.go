@@ -288,8 +288,10 @@ func (n *MasterNode) recvCheckLoop() {
 }
 
 func (n *MasterNode) slaveFinished(msg actor.Message) {
-	id := msg.Data.(SlaveIDMessage).ID
+	data := msg.Data.(SlaveFinishedMessage)
+	id := data.ID
 	n.Logger.WithField("id", id).Infoln("Slave completed load testing")
+
 	n.finishedCount++
 	if n.finishedCount >= n.cfg.Master.ExpectSlaves {
 		n.Logger.Infoln("All slaves successfully completed load testing")

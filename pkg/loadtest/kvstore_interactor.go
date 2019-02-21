@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,8 @@ type KVStoreHTTPInteractor struct {
 	counter   int
 
 	stats map[string]*SummaryStats
+
+	mtx *sync.RWMutex
 }
 
 type abciQueryHTTPResponse struct {
@@ -75,6 +78,7 @@ func NewKVStoreHTTPInteractor(cfg *Config) *KVStoreHTTPInteractor {
 			"broadcast_tx_sync": NewSummaryStats(time.Duration(cfg.Clients.RequestTimeout)),
 			"abci_query":        NewSummaryStats(time.Duration(cfg.Clients.RequestTimeout)),
 		},
+		mtx: &sync.RWMutex{},
 	}
 }
 
@@ -89,15 +93,34 @@ func (i *KVStoreHTTPInteractor) Init() error {
 //    value we put in.
 func (i *KVStoreHTTPInteractor) Interact() {
 	t, err := i.putValue()
-	i.stats["broadcast_tx_sync"].AddNano(t, err)
+	i.addStats("broadcast_tx_sync", t, err)
 
 	t, err = i.getValue()
-	i.stats["abci_query"].AddNano(t, err)
+	i.addStats("abci_query", t, err)
+}
+
+// GetStats returns a summary of the requests' stats so far.
+func (i *KVStoreHTTPInteractor) GetStats() map[string]*SummaryStats {
+	i.mtx.RLock()
+	defer i.mtx.RUnlock()
+	// make copies of the stats
+	broadcastTxSync := *i.stats["broadcast_tx_sync"]
+	abciQuery := *i.stats["abci_query"]
+	return map[string]*SummaryStats{
+		"broadcast_tx_sync": &broadcastTxSync,
+		"abci_query":        &abciQuery,
+	}
 }
 
 // Shutdown does nothing for this particular interactor.
 func (i *KVStoreHTTPInteractor) Shutdown() error {
 	return nil
+}
+
+func (i *KVStoreHTTPInteractor) addStats(reqID string, t int64, err error) {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+	i.stats[reqID].AddNano(t, err)
 }
 
 func (i *KVStoreHTTPInteractor) putValue() (int64, error) {

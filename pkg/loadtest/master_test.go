@@ -2,6 +2,7 @@ package loadtest_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"testing"
 	"time"
@@ -12,11 +13,17 @@ import (
 )
 
 func testConfig(expectSlaves int, clientType string) *loadtest.Config {
-	masterAddr := getFreeTCPAddress()
+	masterHost, masterPort := getFreeTCPAddress()
+	masterAddr := fmt.Sprintf("%s:%d", masterHost, masterPort)
+	resultsDir, err := ioutil.TempDir("", "loadtest-test")
+	if err != nil {
+		panic(err)
+	}
 	return &loadtest.Config{
 		Master: loadtest.MasterConfig{
 			Bind:         masterAddr,
 			ExpectSlaves: expectSlaves,
+			ResultsDir:   resultsDir,
 		},
 		Slave: loadtest.SlaveConfig{
 			Master: masterAddr,
@@ -31,7 +38,7 @@ func testConfig(expectSlaves int, clientType string) *loadtest.Config {
 	}
 }
 
-func getFreeTCPAddress() string {
+func getFreeTCPAddress() (string, int) {
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:")
 	if err != nil {
 		panic(err)
@@ -41,7 +48,7 @@ func getFreeTCPAddress() string {
 		panic(err)
 	}
 	defer l.Close()
-	return fmt.Sprintf("127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port)
+	return "127.0.0.1", l.Addr().(*net.TCPAddr).Port
 }
 
 // TestMasterNodeLifecycle will test the "happy path" for a master node.

@@ -34,8 +34,8 @@ type SummaryStats struct {
 
 // ClientSummaryStats gives us statistics for a particular client.
 type ClientSummaryStats struct {
-	Interactions SummaryStats
-	Requests     SummaryStats
+	Interactions *SummaryStats            // Stats over all of the interactions.
+	Requests     map[string]*SummaryStats // A mapping of each request ID to a summary of its stats.
 }
 
 //
@@ -70,6 +70,12 @@ func NewSummaryStats(timeout time.Duration) *SummaryStats {
 		bins[i] = 0
 	}
 	return &SummaryStats{
+		Count:        0,
+		Errors:       0,
+		TotalTime:    0,
+		AvgTime:      0,
+		MinTime:      0,
+		MaxTime:      0,
 		TimeBins:     bins,
 		ErrorsByType: make(map[string]int),
 		timeout:      timeoutMs,
@@ -170,6 +176,14 @@ func (i *SummaryStats) Compute() {
 
 // Combine will combine the given client summary stats with this one.
 func (c *ClientSummaryStats) Combine(o *ClientSummaryStats) {
-	c.Interactions.Combine(&o.Interactions)
-	c.Requests.Combine(&o.Requests)
+	c.Interactions.Combine(o.Interactions)
+	for reqID, stats := range o.Requests {
+		if _, ok := c.Requests[reqID]; ok {
+			// if we've already seen this request before, combine them
+			c.Requests[reqID].Combine(stats)
+		} else {
+			// if we haven't, make a copy of the other's stats
+			c.Requests[reqID] = &(*stats)
+		}
+	}
 }

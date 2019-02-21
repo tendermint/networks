@@ -30,6 +30,8 @@ type TestHarness struct {
 	clientsSpawned      int // A counter to keep track of how many clients we've spawned.
 	clients             map[string]*TestHarnessClient
 
+	stats *ClientSummaryStats // For keeping track of the summary stats from the clients.
+
 	mtx *sync.RWMutex
 }
 
@@ -53,7 +55,11 @@ func NewTestHarness(parent *SlaveNode, clientFactory TestHarnessClientFactory) *
 		clientSpawnRate:     0,
 		clientsSpawned:      0,
 		clients:             make(map[string]*TestHarnessClient),
-		mtx:                 &sync.RWMutex{},
+		stats: &ClientSummaryStats{
+			Interactions: NewSummaryStats(time.Duration(parent.cfg.Clients.InteractionTimeout)),
+			Requests:     make(map[string]*SummaryStats),
+		},
+		mtx: &sync.RWMutex{},
 	}
 	th.BaseActor = actor.NewBaseActor(th, "test-harness", inboxSize)
 	return th
@@ -96,6 +102,9 @@ func (th *TestHarness) Handle(msg actor.Message) {
 	switch msg.Type {
 	case SpawnClients:
 		th.spawnClients()
+
+	case ClientStats:
+		th.clientStats(msg)
 
 	case ClientFinished:
 		th.clientFinished(msg)
@@ -172,11 +181,14 @@ func (th *TestHarness) broadcast(msg actor.Message) {
 }
 
 func (th *TestHarness) clientFinished(msg actor.Message) {
-	id := msg.Data.(ClientStatsMessage).ID
+	data := msg.Data.(ClientStatsMessage)
+	th.Logger.WithField("data", data).Infoln("Got client finished notification")
+	id := data.ID
+	th.stats.Combine(data.Stats)
 	th.removeClient(id)
 	// if all the clients have finished
 	if th.clientCount() == 0 {
-		th.Send(th, actor.Message{Type: TestHarnessFinished})
+		th.Send(th, actor.Message{Type: TestHarnessFinished, Data: *th.stats})
 	}
 }
 
@@ -224,4 +236,9 @@ func (th *TestHarness) waitForAllClients() {
 	case <-time.After(TestHarnessShutdownTimeLimit):
 		th.Logger.Errorln("Failed to shut down all clients before stopping test harness")
 	}
+}
+
+func (th *TestHarness) clientStats(msg actor.Message) {
+	stats := msg.Data.(ClientStatsMessage).Stats
+	th.stats.Combine(stats)
 }

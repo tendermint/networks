@@ -99,8 +99,9 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 		n.startLoadTesting()
 
 	case TestHarnessFinished:
+		stats := msg.Data.(ClientSummaryStats)
 		n.Logger.Infoln("Test harness finished load testing")
-		n.Send(n.master, actor.Message{Type: SlaveFinished, Data: SlaveIDMessage{ID: n.GetID()}})
+		n.Send(n.master, actor.Message{Type: SlaveFinished, Data: SlaveFinishedMessage{ID: n.GetID(), Stats: stats}})
 		n.Shutdown()
 
 	case TooManySlaves:
