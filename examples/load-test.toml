@@ -56,6 +56,11 @@ prometheus_poll_timeout = "1s"
     host = "192.168.2.3"
 
 [clients]
+# What type of client to spawn. There are 2 provided client types at present:
+# `kvstore_http` (interacts with the `kvstore` proxy app via HTTP), and
+# `kvstore_websockets` (interacts with the `kvstore` proxy app via WebSockets).
+type = "kvstore_http"
+
 # The number of clients to spawn per slave.
 spawn = 500
 
@@ -77,13 +82,16 @@ max_interactions = 10000
 # the test will be brought to and end.
 max_test_time = "10m"
 
-# The maximum time to wait between each subsequent request in an interaction.
-# The actual wait times will be uniformly randomly distributed between
-# `request_wait_min` and `request_wait_max`.
+# The maximum time to wait before each request in an interaction. The actual
+# wait times will be uniformly randomly distributed between `request_wait_min`
+# and `request_wait_max`.
 request_wait_min = "50ms"
 
-# The minimum time to wait between each subsequent request in an interaction.
+# The minimum time to wait before request in an interaction.
 request_wait_max = "100ms"
 
-# After how long do we consider a request to have "timed out"?
+# After how long do we consider a request to have timed out?
 request_timeout = "5s"
+
+# After how long do we consider an interaction to have timed out?
+interaction_timeout = "11s"
