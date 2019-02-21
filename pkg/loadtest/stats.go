@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -62,12 +63,12 @@ func TimeRequest(req func() error) *RequestStats {
 // NewSummaryStats creates a summary stats tracker with the given maximum
 // timeout for an interaction/request.
 func NewSummaryStats(timeout time.Duration) *SummaryStats {
-	timeoutMs := int64(math.Round(float64(timeout) / float64(time.Millisecond)))
+	timeoutMs := int64(math.Round(float64(timeout / time.Millisecond)))
 	binCount := DefaultStatsHistogramBins
 	bins := make(map[int]int)
 	binSize := timeoutMs / int64(binCount)
 	for i := 0; i < binCount+1; i++ {
-		bins[i] = 0
+		bins[i*int(binSize)] = 0
 	}
 	return &SummaryStats{
 		Count:        0,
@@ -86,88 +87,100 @@ func NewSummaryStats(timeout time.Duration) *SummaryStats {
 
 // Add will add a new interaction time (milliseconds) and perform the relevant
 // calculations.
-func (i *SummaryStats) Add(t int64, errs ...error) {
+func (s *SummaryStats) Add(t int64, errs ...error) {
 	// cap the value at the timeout
-	if t > i.timeout {
-		t = i.timeout
+	if t > s.timeout {
+		t = s.timeout
 	}
 
-	if i.Count == 0 {
-		i.MinTime = t
-		i.MaxTime = t
+	if s.Count == 0 {
+		s.MinTime = t
+		s.MaxTime = t
 	} else {
-		if t < i.MinTime {
-			i.MinTime = t
+		if t < s.MinTime {
+			s.MinTime = t
 		}
-		if t > i.MaxTime {
-			i.MaxTime = t
+		if t > s.MaxTime {
+			s.MaxTime = t
 		}
 	}
 
-	i.TotalTime += t
-	i.Count++
+	s.TotalTime += t
+	s.Count++
 	if len(errs) > 0 && errs[0] != nil {
 		errStr := errs[0].Error()
-		if _, ok := i.ErrorsByType[errStr]; !ok {
-			i.ErrorsByType[errStr] = 1
+		if _, ok := s.ErrorsByType[errStr]; !ok {
+			s.ErrorsByType[errStr] = 1
 		} else {
-			i.ErrorsByType[errStr]++
+			s.ErrorsByType[errStr]++
 		}
-		i.Errors++
+		s.Errors++
 	}
 
-	bin := int(math.Round(float64(t) / float64(i.binSize)))
-	if bin < i.binCount {
-		i.TimeBins[bin]++
+	bin := (t / s.binSize) * s.binSize
+	if bin <= s.timeout {
+		s.TimeBins[int(bin)]++
 	}
 }
 
 // AddNano calls Add assuming that the given time is in nanoseconds, and thus
 // needs to be divided by 1000 before being added.
-func (i *SummaryStats) AddNano(t int64, errs ...error) {
-	i.Add(t/1000, errs...)
+func (s *SummaryStats) AddNano(t int64, errs ...error) {
+	s.Add(t/1000, errs...)
 }
 
 // TimeAndAdd executes the given function, tracking how long it takes to
 // execute and whether it returns an error, and adds
-func (i *SummaryStats) TimeAndAdd(req func() error) {
+func (s *SummaryStats) TimeAndAdd(req func() error) {
 	rs := TimeRequest(req)
-	i.Add(rs.TimeTaken, rs.Err)
+	s.Add(rs.TimeTaken, rs.Err)
 }
 
 // Combine will add the stats from the given summary into this one. Assumes that
 // `o` has the exact same time bin configuration as `i`.
-func (i *SummaryStats) Combine(o *SummaryStats) {
-	i.TotalTime += o.TotalTime
-	i.Count += o.Count
-	i.Errors += o.Errors
+func (s *SummaryStats) Combine(o *SummaryStats) {
+	s.TotalTime += o.TotalTime
+	s.Count += o.Count
+	s.Errors += o.Errors
 
-	if o.MinTime < i.MinTime {
-		i.MinTime = o.MinTime
+	if o.MinTime < s.MinTime {
+		s.MinTime = o.MinTime
 	}
-	if o.MaxTime > i.MaxTime {
-		i.MaxTime = o.MaxTime
+	if o.MaxTime > s.MaxTime {
+		s.MaxTime = o.MaxTime
 	}
 
 	// combine the counts from the bins
-	for bin := 0; bin < i.binCount; bin++ {
-		i.TimeBins[bin] += o.TimeBins[bin]
+	for bin := int64(0); bin <= s.timeout; bin += s.binSize {
+		s.TimeBins[int(bin)] += o.TimeBins[int(bin)]
 	}
 
 	// combine the counts from the error bins
 	for errType, count := range o.ErrorsByType {
-		if _, ok := i.ErrorsByType[errType]; !ok {
-			i.ErrorsByType[errType] = count
+		if _, ok := s.ErrorsByType[errType]; !ok {
+			s.ErrorsByType[errType] = count
 		} else {
-			i.ErrorsByType[errType] += count
+			s.ErrorsByType[errType] += count
 		}
 	}
 }
 
 // Compute will calculate any remaining stats that weren't calculated on-the-fly
 // during the Add function calls.
-func (i *SummaryStats) Compute() {
-	i.AvgTime = float64(i.TotalTime) / float64(i.Count)
+func (s *SummaryStats) Compute() {
+	s.AvgTime = float64(s.TotalTime) / float64(s.Count)
+}
+
+// PrintTimeBins is useful for debugging purposes.
+func (s *SummaryStats) PrintTimeBins() {
+	i := 0
+	for bin := int64(0); bin <= s.timeout; bin += s.binSize {
+		fmt.Printf("%d:\t%d\t", bin, s.TimeBins[int(bin)])
+		i++
+		if (i % 10) == 0 {
+			fmt.Printf("\n")
+		}
+	}
 }
 
 //
