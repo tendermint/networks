@@ -129,5 +129,8 @@ func mockMasterNode(bindAddr, slaveID string, errc chan error, stopc chan bool) 
 		} else {
 			fmt.Println("Successfully terminated server")
 		}
+
+	case <-time.After(1 * time.Minute):
+		errc <- fmt.Errorf("Timed out waiting for server stop signal")
 	}
 }
