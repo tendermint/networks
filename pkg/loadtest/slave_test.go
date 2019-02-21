@@ -1,6 +1,7 @@
 package loadtest_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -20,14 +21,19 @@ func noopClientFactory(th *loadtest.TestHarness) *loadtest.TestHarnessClient {
 	return loadtest.NewTestHarnessClient(th, &loadtest.NoopInteractor{})
 }
 
+// Tests the basic "happy path" for the slave node.
 func TestSlaveNodeLifecycle(t *testing.T) {
-	cfg := testConfig()
-	cfg.Master.ExpectSlaves = 1
+	cfg := testConfig(1, "noop")
 
 	slave := loadtest.NewSlaveNode(cfg, noopClientFactory)
 
 	errc := make(chan error)
-	go mockMasterNode(cfg.Master.Bind, slave.GetID(), errc)
+	stopc := make(chan bool)
+	go mockMasterNode(cfg.Master.Bind, slave.GetID(), errc, stopc)
+	defer func() {
+		// bring the HTTP server down
+		stopc <- true
+	}()
 
 	if err := slave.Start(); err != nil {
 		t.Fatal(err)
@@ -52,7 +58,7 @@ func TestSlaveNodeLifecycle(t *testing.T) {
 	}
 }
 
-func mockMasterNode(bindAddr, slaveID string, errc chan error) {
+func mockMasterNode(bindAddr, slaveID string, errc chan error, stopc chan bool) {
 	testMux := http.NewServeMux()
 	testMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -105,7 +111,23 @@ func mockMasterNode(bindAddr, slaveID string, errc chan error) {
 			return
 		}
 	})
-	if err := http.ListenAndServe(bindAddr, testMux); err != nil {
-		errc <- err
+	httpServer := &http.Server{
+		Addr:    bindAddr,
+		Handler: testMux,
+	}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			errc <- err
+		}
+	}()
+
+	// wait until we get the stop signal to shut down the HTTP server
+	select {
+	case <-stopc:
+		if err := httpServer.Shutdown(context.Background()); err != nil {
+			errc <- fmt.Errorf("Failed to cleanly shut down HTTP server")
+		} else {
+			fmt.Println("Successfully terminated server")
+		}
 	}
 }
