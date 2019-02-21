@@ -11,18 +11,18 @@ import (
 	"github.com/tendermint/networks/pkg/loadtest"
 )
 
-func testConfig() *loadtest.Config {
+func testConfig(expectSlaves int, clientType string) *loadtest.Config {
 	masterAddr := getFreeTCPAddress()
 	return &loadtest.Config{
 		Master: loadtest.MasterConfig{
 			Bind:         masterAddr,
-			ExpectSlaves: 2,
+			ExpectSlaves: expectSlaves,
 		},
 		Slave: loadtest.SlaveConfig{
 			Master: masterAddr,
 		},
 		Clients: loadtest.ClientConfig{
-			Type:            "noop",
+			Type:            clientType,
 			Spawn:           1,
 			SpawnRate:       1,
 			MaxInteractions: 1,
@@ -46,7 +46,7 @@ func getFreeTCPAddress() string {
 
 // TestMasterNodeLifecycle will test the "happy path" for a master node.
 func TestMasterNodeLifecycle(t *testing.T) {
-	cfg := testConfig()
+	cfg := testConfig(2, "noop")
 	master := loadtest.NewMasterNode(cfg)
 	if err := master.Start(); err != nil {
 		t.Fatal("Failed to start master node", err)
