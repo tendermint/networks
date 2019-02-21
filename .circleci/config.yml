@@ -47,6 +47,6 @@ jobs:
 
 workflows:
   version: 2
-  iam_and_roles_config:
+  ecs_testnet_deployment:
     jobs:
       - build
