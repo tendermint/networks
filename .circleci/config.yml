@@ -9,8 +9,7 @@ network: &network
     command: |
       cd testnet-kitchen/conf/network
 
-      terragrunt plan -out ~/plan.output
-      terragrunt apply ~/plan.output
+      apply_config
       rm ~/plan.output
 
 ecs: &ecs
@@ -28,8 +27,7 @@ ecs: &ecs
 
       cd testnet-kitchen/conf/ecs
 
-      terragrunt plan -detailed-exitcode -out ~/plan.output
-      terragrunt apply ~/plan.output
+      apply_config
       rm ~/plan.output
 
 
