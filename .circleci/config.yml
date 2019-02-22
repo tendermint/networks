@@ -1,15 +1,58 @@
 version: 2
 
-defaults: &defaults
+aliases:
+  - &TERRAGRUNT tendermintdev/terragrunt
+
+network: &network
+  run:
+    name: Applying network configuration
+    command: |
+      cd testnet-kitchen/conf/network
+
+      apply_config
+      rm ~/plan.output
+
+ecs: &ecs
+  run:
+    name: Applying ecs configuration
+    command: |
+      export FILES_FOLDER=testnet-kitchen/src/ecs/files
+
+      if [[ -z ${CONFIG_TOML} ]]; then
+        echo "Using default config.toml"
+        mv $FILES_FOLDER/config.toml.default $FILES_FOLDER/config.toml
+      else
+        echo $CONFIG_TOML > $FILES_FOLDER/config.toml
+      fi
+
+      cd testnet-kitchen/conf/ecs
+
+      apply_config
+      rm ~/plan.output
+
+tools_defaults: &tools_defaults
   working_directory: /go/src/github.com/tendermint/networks
   docker:
     - image: circleci/golang:1.11.4
   environment:
     GOBIN: /tmp/workspace/bin
 
+build_env: &build_env
+  docker:
+    - image: *TERRAGRUNT
+  environment:
+    AWS_REGION: us-east-1
+
 jobs:
-  setup_dependencies:
-    <<: *defaults
+  build:
+    <<: *build_env
+    steps:
+      - checkout
+      - *network
+      - *ecs
+    
+  tools_setup_dependencies:
+    <<: *tools_defaults
     steps:
       - run: mkdir -p /tmp/workspace/bin
       - checkout
@@ -30,8 +73,8 @@ jobs:
           paths:
             - /go/src/github.com/tendermint/networks
 
-  lint:
-    <<: *defaults
+  tools_lint:
+    <<: *tools_defaults
     steps:
       - attach_workspace:
           at: /tmp/workspace
@@ -45,8 +88,8 @@ jobs:
             export PATH="${GOBIN}:${PATH}"
             make lint
 
-  test:
-    <<: *defaults
+  tools_test:
+    <<: *tools_defaults
     steps:
       - attach_workspace:
           at: /tmp/workspace
@@ -62,12 +105,16 @@ jobs:
 
 workflows:
   version: 2
-  test-suite:
+  ecs_testnet_deployment:
     jobs:
-      - setup_dependencies
-      - lint:
+      - build
+
+  tools_test_suite:
+    jobs:
+      - tools_setup_dependencies
+      - tools_lint:
           requires:
-            - setup_dependencies
-      - test:
+            - tools_setup_dependencies
+      - tools_test:
           requires:
-            - setup_dependencies
+            - tools_setup_dependencies
