@@ -83,6 +83,7 @@ func TestFullIntegrationHTTPKVStore(t *testing.T) {
 	go func() { masterc <- loadtest.RunMasterWithConfig(cfg) }()
 
 	logger.Debug("Waiting for master to start up...")
+	timeoutCounter := 10
 	// wait for the master to start up
 	for {
 		c, err := net.Dial("tcp", cfg.Slave.Master)
@@ -90,7 +91,17 @@ func TestFullIntegrationHTTPKVStore(t *testing.T) {
 			c.Close()
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case err := <-masterc:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(100 * time.Millisecond):
+			timeoutCounter--
+			if timeoutCounter <= 0 {
+				t.Fatal("Timed out waiting for master to start up")
+			}
+		}
 	}
 	logger.Debug("Master started. Running slaves...")
 
