@@ -29,7 +29,7 @@ func newRemoteMaster(addr string, slave *SlaveNode) *remoteMaster {
 }
 
 func (m *remoteMaster) OnStart() error {
-	m.Logger.WithField("addr", m.addr).Infoln("Attempting to connect to master")
+	m.Logger.Info("Attempting to connect to master", "addr", m.addr)
 	conn, _, err := websocket.DefaultDialer.Dial(m.addr, nil)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (m *remoteMaster) OnStart() error {
 }
 
 func (m *remoteMaster) connCloseHandler(code int, text string) error {
-	m.Logger.Infoln("Remote side closed the connection")
+	m.Logger.Info("Remote side closed the connection")
 	m.Send(m, actor.Message{Type: ConnectionClosed})
 	return nil
 }
@@ -61,12 +61,14 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 		}
 		res := m.recvMessage(msg, timeout)
 
-		// peek into the response from the master
-		switch res.Type {
-		case TooManySlaves, AlreadySeenSlave, SlaveFailed:
-			m.Logger.WithField("type", res.Type).Errorln("Master notified us of failure")
-			m.Shutdown()
-			return
+		if res != nil {
+			// peek into the response from the master
+			switch res.Type {
+			case TooManySlaves, AlreadySeenSlave, SlaveFailed:
+				m.Logger.Error("Master notified us of failure", "type", res.Type)
+				m.Shutdown()
+				return
+			}
 		}
 
 	// Send the given message to the remote master
@@ -77,13 +79,13 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 		switch msg.Type {
 		case SlaveFinished:
 			if err := webSocketsClose(m.conn); err != nil {
-				m.Logger.WithError(err).Errorln("Failed to cleanly close WebSockets connection")
+				m.Logger.Error("Failed to cleanly close WebSockets connection", "err", err)
 			}
 			m.Shutdown()
 			return
 
 		case SlaveFailed:
-			m.Logger.Errorln("Slave failed")
+			m.Logger.Error("Slave failed")
 			m.Shutdown()
 			return
 		}
@@ -93,7 +95,7 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 func (m *remoteMaster) recvMessage(src actor.Message, timeouts ...time.Duration) *actor.Message {
 	res, err := webSocketsRecv(m.conn, timeouts...)
 	if err != nil {
-		m.Logger.WithError(err).Errorln("Failed to recv incoming WebSockets message")
+		m.Logger.Error("Failed to recv incoming WebSockets message", "err", err)
 		res = nil
 	} else {
 		res.Sender = m
@@ -104,8 +106,8 @@ func (m *remoteMaster) recvMessage(src actor.Message, timeouts ...time.Duration)
 
 func (m *remoteMaster) sendMessage(msg actor.Message) {
 	if err := webSocketsSend(m.conn, msg); err != nil {
-		m.Logger.WithError(err).Errorln("Failed to send WebSockets message")
+		m.Logger.Error("Failed to send WebSockets message", "err", err)
 	} else {
-		m.Logger.WithField("msg", msg).Debugln("Sent message")
+		m.Logger.Debug("Sent message", "msg", msg)
 	}
 }

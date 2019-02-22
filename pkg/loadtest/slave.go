@@ -41,7 +41,7 @@ type SlaveNode struct {
 	mtx *sync.RWMutex
 
 	startCheckTicker *time.Ticker
-	startCheckChan   chan struct{}
+	startCheckChan   chan bool
 }
 
 // NewSlaveNode instantiates a new slave node, but does not start the actor.
@@ -53,7 +53,7 @@ func NewSlaveNode(cfg *Config, clientFactory TestHarnessClientFactory) *SlaveNod
 		state:            SlaveStarting,
 		mtx:              &sync.RWMutex{},
 		startCheckTicker: nil,
-		startCheckChan:   make(chan struct{}),
+		startCheckChan:   make(chan bool, 2),
 	}
 	n.master = newRemoteMaster(cfg.Slave.Master, n)
 	n.testHarness = NewTestHarness(n, clientFactory)
@@ -66,7 +66,7 @@ func NewSlaveNode(cfg *Config, clientFactory TestHarnessClientFactory) *SlaveNod
 func (n *SlaveNode) OnStart() error {
 	n.setState(SlaveConnecting)
 	if err := n.master.Start(); err != nil {
-		n.Logger.WithError(err).Errorln("Failed to connect to remote master")
+		n.Logger.Error("Failed to connect to remote master", "err", err)
 		n.setState(SlaveFailing)
 		return err
 	}
@@ -80,7 +80,7 @@ func (n *SlaveNode) OnStart() error {
 func (n *SlaveNode) OnShutdown() error {
 	if n.startCheckTicker != nil {
 		n.startCheckTicker.Stop()
-		close(n.startCheckChan)
+		n.startCheckChan <- true
 	}
 	n.master.Shutdown()
 	return n.master.Wait()
@@ -100,7 +100,7 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 
 	case TestHarnessFinished:
 		stats := msg.Data.(ClientSummaryStats)
-		n.Logger.Infoln("Test harness finished load testing")
+		n.Logger.Info("Test harness finished load testing")
 		n.Send(n.master, actor.Message{Type: SlaveFinished, Data: SlaveFinishedMessage{ID: n.GetID(), Stats: stats}})
 		n.Shutdown()
 
@@ -119,7 +119,7 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 }
 
 func (n *SlaveNode) slaveReady() {
-	n.Logger.Infoln("Sending slave ready notification")
+	n.Logger.Info("Sending slave ready notification")
 	n.Send(n.master, actor.Message{Type: SlaveReady, Data: SlaveIDMessage{ID: n.GetID()}})
 
 	// we need to hear a SlaveAccepted (or error) message back from the master
@@ -130,7 +130,7 @@ func (n *SlaveNode) setState(newState SlaveState) {
 	n.mtx.Lock()
 	defer n.mtx.Unlock()
 	n.state = newState
-	n.Logger.WithField("state", newState).Debugln("Slave state changed")
+	n.Logger.Debug("Slave state changed", "state", newState)
 }
 
 // func (n *SlaveNode) getState() SlaveState {
@@ -140,13 +140,13 @@ func (n *SlaveNode) setState(newState SlaveState) {
 // }
 
 func (n *SlaveNode) errorAndShutdown(err ErrorCode) {
-	n.Logger.Errorln(ErrorMessageForCode(err))
+	n.Logger.Error(ErrorMessageForCode(err))
 	n.setState(SlaveFailing)
 	n.FailAndShutdown(NewError(err, nil))
 }
 
 func (n *SlaveNode) slaveAccepted(src actor.Message) {
-	n.Logger.Infoln("Slave accepted by master")
+	n.Logger.Info("Slave accepted by master")
 	n.setState(SlaveWaiting)
 	n.startCheckTicker = time.NewTicker(SlaveStartCheckInterval)
 	go n.startCheckLoop()
@@ -174,14 +174,14 @@ func (n *SlaveNode) startLoadTesting() {
 	if n.startCheckTicker != nil {
 		n.startCheckTicker.Stop()
 	}
-	n.Logger.Infoln("Starting load testing")
+	n.Logger.Info("Starting load testing")
 
 	// start the test harness
 	if err := n.testHarness.Start(); err != nil {
-		n.Logger.WithError(err).Errorln("Failed to start test harness")
+		n.Logger.Error("Failed to start test harness", "err", err)
 		n.FailAndShutdown(NewError(ErrFailedToStartTestHarness, err))
 		return
 	}
 
-	n.Logger.Infoln("Test harness started")
+	n.Logger.Info("Test harness started")
 }

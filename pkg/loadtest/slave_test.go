@@ -27,8 +27,8 @@ func TestSlaveNodeLifecycle(t *testing.T) {
 
 	slave := loadtest.NewSlaveNode(cfg, noopClientFactory)
 
-	errc := make(chan error)
-	stopc := make(chan bool)
+	errc := make(chan error, 1)
+	stopc := make(chan bool, 1)
 	go mockMasterNode(cfg.Master.Bind, slave.GetID(), errc, stopc)
 	defer func() {
 		// bring the HTTP server down
@@ -39,7 +39,7 @@ func TestSlaveNodeLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		done <- slave.Wait()
 	}()

@@ -1,8 +1,12 @@
 package loadtest
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -19,24 +23,24 @@ type RequestStats struct {
 // SummaryStats represents a collection of statistics relevant to multiple
 // interactions or requests.
 type SummaryStats struct {
-	Count        int64          // Total number of interactions/requests.
-	Errors       int64          // How many errors occurred.
-	TotalTime    int64          // Interaction time summed across all interactions/requests (milliseconds).
-	AvgTime      float64        // Average interaction/request time (milliseconds).
-	MinTime      int64          // Minimum interaction/request time (milliseconds).
-	MaxTime      int64          // Maximum interaction/request time (milliseconds).
-	TimeBins     map[int]int    // Counts of interaction/request times (histogram).
-	ErrorsByType map[string]int // Counts of different errors by type of error.
+	Count        int64          `json:"count"`        // Total number of interactions/requests.
+	Errors       int64          `json:"errors"`       // How many errors occurred.
+	TotalTime    int64          `json:"totalTime"`    // Interaction time summed across all interactions/requests (milliseconds).
+	AvgTime      float64        `json:"avgTime"`      // Average interaction/request time (milliseconds).
+	MinTime      int64          `json:"minTime"`      // Minimum interaction/request time (milliseconds).
+	MaxTime      int64          `json:"maxTime"`      // Maximum interaction/request time (milliseconds).
+	TimeBins     map[int]int    `json:"timeBins"`     // Counts of interaction/request times (histogram).
+	ErrorsByType map[string]int `json:"errorsByType"` // Counts of different errors by type of error.
 
-	timeout  int64 // The maximum possible range of the histogram.
-	binSize  int64 // The size of a histogram bin (milliseconds).
-	binCount int   // The number of bins in TimeBins.
+	Timeout  int64 `json:"timeout"`  // The maximum possible range of the histogram.
+	BinSize  int64 `json:"binSize"`  // The size of a histogram bin (milliseconds).
+	BinCount int   `json:"binCount"` // The number of bins in TimeBins.
 }
 
 // ClientSummaryStats gives us statistics for a particular client.
 type ClientSummaryStats struct {
-	Interactions *SummaryStats            // Stats over all of the interactions.
-	Requests     map[string]*SummaryStats // A mapping of each request ID to a summary of its stats.
+	Interactions *SummaryStats            `json:"interactions"` // Stats over all of the interactions.
+	Requests     map[string]*SummaryStats `json:"requests"`     // A mapping of each request ID to a summary of its stats.
 }
 
 //
@@ -64,9 +68,15 @@ func TimeRequest(req func() error) *RequestStats {
 // timeout for an interaction/request.
 func NewSummaryStats(timeout time.Duration) *SummaryStats {
 	timeoutMs := int64(math.Round(float64(timeout / time.Millisecond)))
+	if timeoutMs == 0 {
+		panic("timeout cannot be 0ms")
+	}
 	binCount := DefaultStatsHistogramBins
 	bins := make(map[int]int)
 	binSize := timeoutMs / int64(binCount)
+	if binSize == 0 {
+		panic(fmt.Sprintf("timeout must be at least %dms", binCount))
+	}
 	for i := 0; i < binCount+1; i++ {
 		bins[i*int(binSize)] = 0
 	}
@@ -79,9 +89,9 @@ func NewSummaryStats(timeout time.Duration) *SummaryStats {
 		MaxTime:      0,
 		TimeBins:     bins,
 		ErrorsByType: make(map[string]int),
-		timeout:      timeoutMs,
-		binSize:      binSize,
-		binCount:     binCount + 1,
+		Timeout:      timeoutMs,
+		BinSize:      binSize,
+		BinCount:     binCount + 1,
 	}
 }
 
@@ -89,8 +99,8 @@ func NewSummaryStats(timeout time.Duration) *SummaryStats {
 // calculations.
 func (s *SummaryStats) Add(t int64, errs ...error) {
 	// cap the value at the timeout
-	if t > s.timeout {
-		t = s.timeout
+	if t > s.Timeout {
+		t = s.Timeout
 	}
 
 	if s.Count == 0 {
@@ -117,8 +127,8 @@ func (s *SummaryStats) Add(t int64, errs ...error) {
 		s.Errors++
 	}
 
-	bin := (t / s.binSize) * s.binSize
-	if bin <= s.timeout {
+	bin := (t / s.BinSize) * s.BinSize
+	if bin <= s.Timeout {
 		s.TimeBins[int(bin)]++
 	}
 }
@@ -151,7 +161,7 @@ func (s *SummaryStats) Combine(o *SummaryStats) {
 	}
 
 	// combine the counts from the bins
-	for bin := int64(0); bin <= s.timeout; bin += s.binSize {
+	for bin := int64(0); bin <= s.Timeout; bin += s.BinSize {
 		s.TimeBins[int(bin)] += o.TimeBins[int(bin)]
 	}
 
@@ -174,12 +184,24 @@ func (s *SummaryStats) Compute() {
 // PrintTimeBins is useful for debugging purposes.
 func (s *SummaryStats) PrintTimeBins() {
 	i := 0
-	for bin := int64(0); bin <= s.timeout; bin += s.binSize {
+	for bin := int64(0); bin <= s.Timeout; bin += s.BinSize {
 		fmt.Printf("%d:\t%d\t", bin, s.TimeBins[int(bin)])
 		i++
 		if (i % 10) == 0 {
 			fmt.Printf("\n")
 		}
+	}
+}
+
+// SummaryCSV compiles the summary statistics into a line that can be written to
+// a CSV file.
+func (s *SummaryStats) SummaryCSV() []string {
+	return []string{
+		fmt.Sprintf("%d", s.Errors),
+		fmt.Sprintf("%.3f", s.AvgTime),
+		fmt.Sprintf("%d", s.MinTime),
+		fmt.Sprintf("%d", s.MaxTime),
+		fmt.Sprintf("%d", s.Count),
 	}
 }
 
@@ -199,4 +221,34 @@ func (c *ClientSummaryStats) Combine(o *ClientSummaryStats) {
 			c.Requests[reqID] = &(*stats)
 		}
 	}
+}
+
+// WriteSummary will output CSV data using the given writer.
+func (c *ClientSummaryStats) WriteSummary(w io.Writer) error {
+	headings := []string{"Description", "Errors", "Avg Time", "Min Time", "Max Time", "Total Count"}
+	csvWriter := csv.NewWriter(w)
+	if err := csvWriter.Write(headings); err != nil {
+		return err
+	}
+	row := []string{"Interactions"}
+	row = append(row, c.Interactions.SummaryCSV()...)
+	if err := csvWriter.Write(row); err != nil {
+		return err
+	}
+	requestIDs := []string{}
+	for rid := range c.Requests {
+		requestIDs = append(requestIDs, rid)
+	}
+	sort.Slice(requestIDs, func(i, j int) bool {
+		return strings.Compare(requestIDs[i], requestIDs[j]) < 0
+	})
+	for _, rid := range requestIDs {
+		row = []string{rid}
+		row = append(row, c.Requests[rid].SummaryCSV()...)
+		if err := csvWriter.Write(row); err != nil {
+			return err
+		}
+	}
+	csvWriter.Flush()
+	return nil
 }

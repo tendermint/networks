@@ -1,5 +1,7 @@
 package loadtest
 
+import "time"
+
 // NoopInteractor is a test harness client interactor that does nothing when
 // executed. This is useful for testing.
 type NoopInteractor struct{}
@@ -15,7 +17,9 @@ func (i *NoopInteractor) Interact() {}
 
 // GetStats returns an empty stats map.
 func (i *NoopInteractor) GetStats() map[string]*SummaryStats {
-	return make(map[string]*SummaryStats)
+	return map[string]*SummaryStats{
+		"noop": NewSummaryStats(1 * time.Second),
+	}
 }
 
 // Shutdown does nothing.

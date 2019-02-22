@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
+	"github.com/tendermint/networks/internal/logging"
 )
 
 // Constants relating to actors.
@@ -40,15 +40,15 @@ var _ Actor = (*BaseActor)(nil)
 // BaseActor is a convenience class from which we can derive other actors. This
 // is effectively an "abstract class" and should be treated as such.
 type BaseActor struct {
-	Logger *logrus.Entry
+	Logger *logging.Logger
 
 	impl Actor  // The implementation/derived class for this actor.
 	ctx  string // The context string for logging.
 	id   string // The primary ID for this actor.
 
 	inboxChan            chan Message
-	shutdownChan         chan struct{}
-	shutdownCompleteChan chan struct{}
+	shutdownChan         chan bool
+	shutdownCompleteChan chan bool
 	shutdownStarted      bool
 	shutdownCompleted    bool
 	shutdownErr          error
@@ -69,10 +69,10 @@ func NewBaseActor(impl Actor, ctx string, inboxSizes ...int) *BaseActor {
 		impl:                 impl,
 		ctx:                  ctx,
 		id:                   id,
-		Logger:               makeActorLogger(ctx, id),
+		Logger:               logging.NewLogger(ctx, "id", id),
 		inboxChan:            make(chan Message, inboxSize),
-		shutdownChan:         make(chan struct{}),
-		shutdownCompleteChan: make(chan struct{}),
+		shutdownChan:         make(chan bool, 2),
+		shutdownCompleteChan: make(chan bool, 2),
 		shutdownStarted:      false,
 		shutdownCompleted:    false,
 		shutdownErr:          nil,
@@ -92,15 +92,18 @@ func (a *BaseActor) OnShutdown() error { return nil }
 // impl.OnStart method fails, the error will be returned and the event loop will
 // not be started.
 func (a *BaseActor) Start() error {
+	a.Logger.Debug("Starting up")
 	if a.impl != nil {
 		if err := a.impl.OnStart(); err != nil {
-			a.Logger.WithError(err).Errorln("OnStart event for actor failed")
+			a.Logger.Error("OnStart event for actor failed", "err", err)
 			return err
 		}
 	}
 
 	// kick off the internal event loop
 	go a.eventLoop()
+
+	a.Logger.Debug("Actor started up")
 
 	return nil
 }
@@ -115,7 +118,7 @@ loop:
 			break loop
 		}
 	}
-	close(a.shutdownCompleteChan)
+	a.shutdownCompleteChan <- true
 }
 
 // FailAndShutdown allows us to shut the actor down with the given error. This
@@ -147,7 +150,7 @@ func (a *BaseActor) Shutdown() {
 				a.setShutdownErr(err)
 			}
 		}
-		close(a.shutdownChan)
+		a.shutdownChan <- true
 		a.setShutdownStarted(true)
 	}
 }
@@ -156,6 +159,7 @@ func (a *BaseActor) Shutdown() {
 // process is complete.
 func (a *BaseActor) Wait() error {
 	if !a.isShutdownCompleted() {
+		a.Logger.Debug("Waiting for actor to shut down")
 		<-a.shutdownCompleteChan
 		a.setShutdownCompleted(true)
 	}
@@ -196,10 +200,10 @@ func (a *BaseActor) GetID() string {
 // SetID allows us to override the ID of the actor.
 func (a *BaseActor) SetID(id string) {
 	a.mtx.Lock()
-	defer a.mtx.Unlock()
 	a.id = id
+	a.mtx.Unlock()
 	// reconfigure the logger
-	a.Logger = makeActorLogger(a.ctx, id)
+	a.Logger.SetField("id", id)
 }
 
 // Handle will, by default, just check if we have an implementation actor class
@@ -231,11 +235,4 @@ func (a *BaseActor) Send(other Actor, msg Message) {
 	} else {
 		RouteToDeadLetterInbox(msg)
 	}
-}
-
-func makeActorLogger(ctx, id string) *logrus.Entry {
-	return logrus.WithFields(logrus.Fields{
-		"ctx": ctx,
-		"id":  id,
-	})
 }

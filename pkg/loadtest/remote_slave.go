@@ -37,7 +37,7 @@ func (s *remoteSlave) OnStart() error {
 }
 
 func (s *remoteSlave) connCloseHandler(code int, text string) error {
-	s.Logger.Infoln("Remote side closed the connection")
+	s.Logger.Info("Remote side closed the connection")
 	s.Send(s, actor.Message{Type: ConnectionClosed})
 	return nil
 }
@@ -45,13 +45,14 @@ func (s *remoteSlave) connCloseHandler(code int, text string) error {
 func (s *remoteSlave) OnShutdown() error {
 	// try to close the websockets connection
 	if err := webSocketsClose(s.conn); err != nil {
-		s.Logger.WithError(err).Errorln("Failed to send WebSockets close message")
+		s.Logger.Error("Failed to send WebSockets close message", "err", err)
 		return err
 	}
 	return nil
 }
 
 func (s *remoteSlave) Handle(msg actor.Message) {
+	s.Logger.Debug("Got message", "msg", msg)
 	switch msg.Type {
 	case ConnectionClosed:
 		// inform the master that the connection was closed
@@ -64,16 +65,16 @@ func (s *remoteSlave) Handle(msg actor.Message) {
 		switch res.Type {
 		case SlaveReady:
 			s.SetID(res.Data.(SlaveIDMessage).ID)
-			s.Logger.Infoln("Slave ready")
+			s.Logger.Info("Slave ready")
 
 		case SlaveFinished:
-			s.Logger.Infoln("Slave finished")
+			s.Logger.Info("Slave finished")
 			s.setState(SlaveCompleting)
 			s.Shutdown()
 			return
 
 		case SlaveFailed:
-			s.Logger.Errorln("Slave failed")
+			s.Logger.Error("Slave failed")
 			s.setState(SlaveFailing)
 			s.Shutdown()
 			return
@@ -105,7 +106,7 @@ func (s *remoteSlave) Handle(msg actor.Message) {
 // }
 
 func (s *remoteSlave) setState(newState SlaveState) {
-	s.Logger.WithField("state", newState).Debugln("Remote slave changing state")
+	s.Logger.Debug("Remote slave changing state", "state", newState)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.state = newState
@@ -114,17 +115,17 @@ func (s *remoteSlave) setState(newState SlaveState) {
 func (s *remoteSlave) recvMessage(src actor.Message) *actor.Message {
 	res, err := webSocketsRecv(s.conn)
 	if err != nil {
-		s.Logger.WithError(err).Errorln("Failed to recv incoming WebSockets message")
+		s.Logger.Error("Failed to recv incoming WebSockets message", "err", err)
 		res = nil
 	} else {
 		res.Sender = s
-		src.Reply(*res)
+		s.Send(src.Sender, *res)
 	}
 	return res
 }
 
 func (s *remoteSlave) sendMessage(msg actor.Message) {
 	if err := webSocketsSend(s.conn, msg); err != nil {
-		s.Logger.WithError(err).Errorln("Failed to send WebSockets message")
+		s.Logger.Error("Failed to send WebSockets message", "err", err)
 	}
 }

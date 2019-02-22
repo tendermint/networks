@@ -1,11 +1,12 @@
 package loadtest
 
 import (
+	"os"
+	"path"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 	"github.com/tendermint/networks/pkg/actor"
 )
 
@@ -29,10 +30,11 @@ type MasterNode struct {
 	wss             *WebSocketsServer
 	remoteSlaves    map[string]actor.Actor // To be able to interact with the remote slaves.
 	readyTicker     *time.Ticker           // To keep checking for when we're ready to start load testing.
-	readyTickerStop chan struct{}          // To stop the readiness checker.
+	readyTickerStop chan bool              // To stop the readiness checker.
 	recvTicker      *time.Ticker           // To keep checking for updates from the slaves.
-	recvTickerStop  chan struct{}          // To kill the recv checker.
+	recvTickerStop  chan bool              // To kill the recv checker.
 	finishedCount   int                    // To keep track of how many slaves have successfully completed their load testing.
+	stats           *ClientSummaryStats    // The amalgamated statistics across all slaves' clients.
 	mtx             *sync.RWMutex
 }
 
@@ -46,11 +48,15 @@ func NewMasterNode(cfg *Config) *MasterNode {
 		wss:             nil,
 		remoteSlaves:    make(map[string]actor.Actor),
 		readyTicker:     nil,
-		readyTickerStop: make(chan struct{}),
+		readyTickerStop: make(chan bool, 2),
 		recvTicker:      nil,
-		recvTickerStop:  make(chan struct{}),
+		recvTickerStop:  make(chan bool, 2),
 		finishedCount:   0,
-		mtx:             &sync.RWMutex{},
+		stats: &ClientSummaryStats{
+			Interactions: NewSummaryStats(time.Duration(cfg.Clients.InteractionTimeout)),
+			Requests:     make(map[string]*SummaryStats),
+		},
+		mtx: &sync.RWMutex{},
 	}
 	n.BaseActor = actor.NewBaseActor(n, "master")
 	return n
@@ -62,7 +68,7 @@ func NewMasterNode(cfg *Config) *MasterNode {
 func (n *MasterNode) OnStart() error {
 	n.wss = NewWebSocketsServer(n.cfg.Master.Bind, n.wsClientFactory)
 	if err := n.wss.Start(); err != nil {
-		n.Logger.WithError(err).Errorln("Failed to start WebSockets server")
+		n.Logger.Error("Failed to start WebSockets server", "err", err)
 		n.wss = nil
 		return err
 	}
@@ -84,15 +90,20 @@ func (n *MasterNode) OnShutdown() error {
 		n.readyTicker.Stop()
 	}
 	if n.recvTicker != nil {
-		close(n.recvTickerStop)
+		n.recvTickerStop <- true
 		n.recvTicker.Stop()
 	}
 
+	// wait for all the slaves to shut down
+	n.waitForSlaves()
+
+	n.Logger.Debug("Master node shut down", "err", err)
 	return err
 }
 
 // Handle will interpret incoming messages in the master's event loop.
 func (n *MasterNode) Handle(msg actor.Message) {
+	n.Logger.Debug("Got message", "msg", msg)
 	switch msg.Type {
 	case actor.Ping:
 		n.Send(msg.Sender, actor.Message{Type: actor.Pong})
@@ -108,7 +119,7 @@ func (n *MasterNode) Handle(msg actor.Message) {
 		if msg.Sender.GetID() == n.GetID() {
 			n.startLoadTesting()
 		} else {
-			n.Logger.WithField("id", msg.Sender.GetID()).Errorln("Unrecognized sender for AllSlavesReady message")
+			n.Logger.Error("Unrecognized sender for AllSlavesReady message", "id", msg.Sender.GetID())
 		}
 
 	case SlaveFinished:
@@ -128,17 +139,17 @@ func (n *MasterNode) wsClientFactory(conn *websocket.Conn) (actor.Actor, error) 
 
 func (n *MasterNode) slaveReady(msg actor.Message) {
 	id := msg.Data.(SlaveIDMessage).ID
-	n.Logger.WithField("id", id).Infoln("Got SlaveReady notification from remote slave")
+	n.Logger.Info("Got SlaveReady notification from remote slave", "id", id)
 
 	// first check if we need any more slaves
 	if n.remoteSlaveCount() >= n.cfg.Master.ExpectSlaves {
-		n.Logger.Infoln("Slave tried to connect, but we already have enough")
+		n.Logger.Info("Slave tried to connect, but we already have enough")
 		n.Send(msg.Sender, actor.Message{Type: TooManySlaves})
 		return
 	}
 	// then check if we've seen this slave before
 	if n.remoteSlaveExists(id) {
-		n.Logger.WithField("id", id).Infoln("Already seen slave before")
+		n.Logger.Info("Already seen slave before", "id", id)
 		n.Send(msg.Sender, actor.Message{Type: AlreadySeenSlave})
 		return
 	}
@@ -158,40 +169,29 @@ func (n *MasterNode) slaveFailed(msg actor.Message) {
 }
 
 func (n *MasterNode) failAllSlaves() {
-	n.Logger.Infoln("Informing all slaves of failure")
+	n.Logger.Info("Informing all slaves of failure")
 
 	// tell all the slaves that one of them failed
 	n.broadcast(actor.Message{Type: SlaveFailed})
-
-	// wait for all the slaves to shut down
-	n.waitForSlaves()
 
 	// shut down the master too
 	n.FailAndShutdown(NewError(ErrSlaveFailed, nil))
 }
 
 func (n *MasterNode) waitForSlaves() {
-	// wait for all of the slaves to finish
-	slaves := make([]actor.Actor, len(n.remoteSlaves))
-	for _, rs := range n.remoteSlaves {
-		slaves = append(slaves, rs)
-	}
-	done := make(chan error, len(slaves))
-	go func(slaves_ []actor.Actor) {
-		for _, rs := range slaves_ {
-			done <- rs.Wait()
+	n.Logger.Debug("Waiting for slaves to shut down")
+	startTime := time.Now()
+loop:
+	for {
+		if n.remoteSlaveCount() == 0 {
+			n.Logger.Info("All slaves successfully shut down")
+			break loop
 		}
-	}(slaves)
-
-	// wait for all of the slaves to shut down
-	for i := 0; i < len(slaves); i++ {
-		select {
-		case err := <-done:
-			if err != nil {
-				n.Logger.WithError(err).Errorln("Slave failed to shut down properly")
-			}
-		case <-time.After(RemoteSlaveWaitTimeout):
-			n.Logger.Errorln("Waited long enough for all slaves to shut down")
+		time.Sleep(100 * time.Millisecond)
+		if time.Since(startTime) > RemoteSlaveWaitTimeout {
+			n.Logger.Error("Timed out waiting for remote slaves to shut down")
+			n.FailAndShutdown(NewError(ErrRemoteSlavesShutdownFailed, nil, "timed out"))
+			break loop
 		}
 	}
 }
@@ -204,8 +204,8 @@ func (n *MasterNode) remoteSlaveCount() int {
 
 func (n *MasterNode) remoteSlaveExists(id string) bool {
 	n.mtx.RLock()
-	defer n.mtx.RUnlock()
 	_, ok := n.remoteSlaves[id]
+	n.mtx.RUnlock()
 	return ok
 }
 
@@ -213,19 +213,16 @@ func (n *MasterNode) addRemoteSlave(id string, slave actor.Actor) {
 	n.mtx.Lock()
 	defer n.mtx.Unlock()
 	n.remoteSlaves[id] = slave
-	n.Logger.WithFields(logrus.Fields{
-		"id":    id,
-		"slave": slave,
-	}).Debugln("Added remote slave")
 }
 
 func (n *MasterNode) removeRemoteSlave(id string) {
 	if n.remoteSlaveExists(id) {
 		n.mtx.Lock()
-		defer n.mtx.Unlock()
 		delete(n.remoteSlaves, id)
+		n.mtx.Unlock()
+		n.Logger.Debug("Removed remote slave", "id", id)
 	} else {
-		n.Logger.WithField("id", id).Errorln("No such slave to remove")
+		n.Logger.Error("No such slave to remove", "id", id)
 	}
 }
 
@@ -243,26 +240,23 @@ func (n *MasterNode) readinessCheckLoop() {
 
 func (n *MasterNode) checkIfReady() {
 	if n.remoteSlaveCount() >= n.cfg.Master.ExpectSlaves {
-		n.Logger.Infoln("All slaves connected and ready")
+		n.Logger.Info("All slaves connected and ready")
 		n.Send(n, actor.Message{Type: AllSlavesReady})
 		// we no longer need to check if all slaves are ready
-		close(n.readyTickerStop)
+		n.readyTickerStop <- true
 	}
 }
 
 // broadcast will send the given message to all of the remote slaves.
 func (n *MasterNode) broadcast(msg actor.Message) {
 	for _, rs := range n.remoteSlaves {
-		n.Logger.WithFields(logrus.Fields{
-			"msg": msg,
-			"rs":  rs.GetID(),
-		}).Debugln("Broadcasting message to remote slave")
+		n.Logger.Debug("Broadcasting message to remote slave", "msg", msg, "rs", rs.GetID())
 		n.Send(rs, msg)
 	}
 }
 
 func (n *MasterNode) startLoadTesting() {
-	n.Logger.Infoln("Starting load testing")
+	n.Logger.Info("Starting load testing")
 	// tell all the slaves to start their load testing
 	n.broadcast(actor.Message{Type: StartLoadTest})
 
@@ -288,14 +282,24 @@ func (n *MasterNode) recvCheckLoop() {
 }
 
 func (n *MasterNode) slaveFinished(msg actor.Message) {
+	n.Logger.Debug("In slaveFinished()")
 	data := msg.Data.(SlaveFinishedMessage)
 	id := data.ID
-	n.Logger.WithField("id", id).Infoln("Slave completed load testing")
+	stats := data.Stats
+	if stats.Interactions == nil || len(stats.Requests) == 0 {
+		n.Logger.Error("Missing statistics from slave node")
+		n.FailAndShutdown(NewError(ErrMissingSlaveStats, nil, id))
+		return
+	}
+
+	n.Logger.Debug("About to combine stats")
+	n.stats.Combine(&stats)
+	n.removeRemoteSlave(id)
+	n.Logger.Info("Slave completed load testing", "id", id)
 
 	n.finishedCount++
 	if n.finishedCount >= n.cfg.Master.ExpectSlaves {
-		n.Logger.Infoln("All slaves successfully completed load testing")
-		n.Shutdown()
+		n.allSlavesFinished()
 	}
 }
 
@@ -304,6 +308,22 @@ func (n *MasterNode) connectionClosed(msg actor.Message) {
 	if ok {
 		n.removeRemoteSlave(idMsg.ID)
 	} else {
-		n.Logger.Errorln("Got connection closed message from unknown source")
+		n.Logger.Error("Got connection closed message from unknown source")
 	}
+}
+
+func (n *MasterNode) allSlavesFinished() {
+	n.Logger.Info("All slaves successfully completed load testing")
+	filename := path.Join(n.cfg.Master.ResultsDir, "summary.csv")
+	f, err := os.Create(filename)
+	if err != nil {
+		n.Logger.Error("Failed to create summary output file", "file", filename, "err", err)
+	} else {
+		if err = n.stats.WriteSummary(f); err != nil {
+			n.Logger.Error("Failed to write stats summary to file", "file", filename, "err", err)
+		} else {
+			n.Logger.Info("Wrote summary stats CSV file", "file", filename)
+		}
+	}
+	n.Shutdown()
 }

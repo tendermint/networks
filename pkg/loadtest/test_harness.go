@@ -6,7 +6,6 @@ import (
 	"time"
 
 	uuid "github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/tendermint/networks/pkg/actor"
 )
 
@@ -51,7 +50,7 @@ func NewTestHarness(parent *SlaveNode, clientFactory TestHarnessClientFactory) *
 		parent:              parent,
 		clientFactory:       clientFactory,
 		clientSpawnTicker:   nil,
-		clientSpawnStopChan: make(chan bool),
+		clientSpawnStopChan: make(chan bool, 2),
 		clientSpawnRate:     0,
 		clientsSpawned:      0,
 		clients:             make(map[string]*TestHarnessClient),
@@ -75,10 +74,7 @@ func (th *TestHarness) OnStart() error {
 	} else {
 		th.clientSpawnRate = int(math.Round(float64(th.Cfg.Clients.SpawnRate)))
 	}
-	th.Logger.WithFields(logrus.Fields{
-		"tickerInterval": tickerInterval,
-		"spawnRate":      th.clientSpawnRate,
-	}).Infoln("Test harness starting up")
+	th.Logger.Info("Test harness starting up", "tickerInterval", tickerInterval, "spawnRate", th.clientSpawnRate)
 	th.clientSpawnTicker = time.NewTicker(time.Duration(tickerInterval) * time.Second)
 	go th.clientSpawnLoop()
 	return nil
@@ -114,7 +110,7 @@ func (th *TestHarness) Handle(msg actor.Message) {
 		th.FailAndShutdown(NewError(ErrClientFailed, nil))
 
 	case TestHarnessFinished:
-		th.Logger.Infoln("Test harness completed successfully")
+		th.Logger.Info("Test harness completed successfully")
 		th.Send(th.parent, msg)
 		th.Shutdown()
 	}
@@ -143,12 +139,12 @@ func (th *TestHarness) spawnClients() {
 			client := th.clientFactory(th)
 			th.addClient(client)
 			if err := client.Start(); err != nil {
-				th.Logger.WithError(err).Errorln("Failed to start client")
+				th.Logger.Error("Failed to start client", "err", err)
 				th.Shutdown()
 			}
 		}
 		th.clientsSpawned += toSpawn
-		th.Logger.WithField("clientsSpawned", th.clientsSpawned).Infoln("Spawned clients")
+		th.Logger.Info("Spawned clients", "clientsSpawned", th.clientsSpawned)
 	}
 }
 
@@ -174,7 +170,7 @@ func (th *TestHarness) broadcast(msg actor.Message) {
 	th.mtx.Lock()
 	defer th.mtx.Unlock()
 
-	th.Logger.WithField("msg", msg).Debugln("Broadcasting message to all clients")
+	th.Logger.Debug("Broadcasting message to all clients", "msg", msg)
 	for _, client := range th.clients {
 		th.Send(client, msg)
 	}
@@ -182,7 +178,7 @@ func (th *TestHarness) broadcast(msg actor.Message) {
 
 func (th *TestHarness) clientFinished(msg actor.Message) {
 	data := msg.Data.(ClientStatsMessage)
-	th.Logger.WithField("data", data).Infoln("Got client finished notification")
+	th.Logger.Info("Got client finished notification", "data", data)
 	id := data.ID
 	th.stats.Combine(data.Stats)
 	th.removeClient(id)
@@ -215,26 +211,26 @@ func (th *TestHarness) clientCount() int {
 }
 
 func (th *TestHarness) clientFailed(msg actor.Message) {
-	th.Logger.WithField("id", msg.Sender.GetID()).Errorln("Client failed, shutting down test harness")
+	th.Logger.Error("Client failed, shutting down test harness", "id", msg.Sender.GetID())
 	th.broadcast(actor.Message{Type: ClientFailedShutdown})
 }
 
 func (th *TestHarness) waitForAllClients() {
 	// wait for all of the clients to have shut down
-	allClientsGone := make(chan struct{})
+	allClientsGone := make(chan bool, 1)
 	go func() {
 		for th.clientCount() > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
-		close(allClientsGone)
+		allClientsGone <- true
 	}()
 
 	select {
 	case <-allClientsGone:
-		th.Logger.Infoln("All clients successfully shut down")
+		th.Logger.Info("All clients successfully shut down")
 
 	case <-time.After(TestHarnessShutdownTimeLimit):
-		th.Logger.Errorln("Failed to shut down all clients before stopping test harness")
+		th.Logger.Error("Failed to shut down all clients before stopping test harness")
 	}
 }
 

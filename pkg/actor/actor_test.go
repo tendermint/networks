@@ -11,8 +11,8 @@ type testActor struct {
 	*actor.BaseActor
 
 	testChan     chan actor.Message
-	startupChan  chan struct{}
-	shutdownChan chan struct{}
+	startupChan  chan bool
+	shutdownChan chan bool
 }
 
 var _ actor.Actor = (*testActor)(nil)
@@ -20,20 +20,20 @@ var _ actor.Actor = (*testActor)(nil)
 func newTestActor() *testActor {
 	t := &testActor{
 		testChan:     make(chan actor.Message),
-		startupChan:  make(chan struct{}),
-		shutdownChan: make(chan struct{}),
+		startupChan:  make(chan bool, 1),
+		shutdownChan: make(chan bool, 1),
 	}
 	t.BaseActor = actor.NewBaseActor(t, "test")
 	return t
 }
 
 func (t *testActor) OnStart() error {
-	close(t.startupChan)
+	t.startupChan <- true
 	return nil
 }
 
 func (t *testActor) OnShutdown() error {
-	close(t.shutdownChan)
+	t.shutdownChan <- true
 	return nil
 }
 
@@ -71,7 +71,7 @@ func TestBaseActorLifecycle(t *testing.T) {
 	}
 
 	a.Shutdown()
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		done <- a.Wait()
 	}()
@@ -103,7 +103,7 @@ func TestPoisonPill(t *testing.T) {
 
 	a.Recv(actor.Message{Type: actor.PoisonPill})
 
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		done <- a.Wait()
 	}()

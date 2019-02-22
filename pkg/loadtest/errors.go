@@ -24,6 +24,9 @@ const (
 	ErrClientFailed
 	ErrLongerThanTimeout
 	ErrFailedToStartTestHarness
+	ErrMissingMessageField
+	ErrMissingSlaveStats
+	ErrRemoteSlavesShutdownFailed
 
 	ErrKVStoreClientPutFailed
 	ErrKVStoreClientGetFailed
@@ -95,6 +98,13 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Failed to start test harness"
 	case ErrInvalidConfig:
 		result = "Invalid configuration"
+	case ErrMissingMessageField:
+		result = "Message is missing a required field"
+	case ErrMissingSlaveStats:
+		result = "Missing statistics from slave node"
+	case ErrRemoteSlavesShutdownFailed:
+		result = "Remote slaves shutdown failed"
+
 	case ErrKVStoreClientPutFailed:
 		result = "KVStore client \"put\" request failed"
 	case ErrKVStoreClientGetFailed:

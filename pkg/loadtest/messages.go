@@ -34,8 +34,8 @@ type SlaveIDMessage struct {
 }
 
 type SlaveFinishedMessage struct {
-	ID    string `json:"id"`
-	Stats ClientSummaryStats
+	ID    string             `json:"id"`
+	Stats ClientSummaryStats `json:"stats"`
 }
 
 type RecvMessageConfig struct {
@@ -43,12 +43,12 @@ type RecvMessageConfig struct {
 }
 
 type ClientIDMessage struct {
-	ID string
+	ID string `json:"id"`
 }
 
 type ClientStatsMessage struct {
-	ID    string
-	Stats *ClientSummaryStats
+	ID    string              `json:"id"`
+	Stats *ClientSummaryStats `json:"stats"`
 }
 
 func init() {
@@ -72,6 +72,9 @@ func ParseSlaveIDMessage(data json.RawMessage) (interface{}, error) {
 }
 
 func ParseSlaveFinishedMessage(data json.RawMessage) (interface{}, error) {
+	if data == nil || len(data) == 0 {
+		return nil, NewError(ErrMissingMessageField, nil, "\"data\" field is compulsory for this message type")
+	}
 	msg := SlaveFinishedMessage{}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return nil, err

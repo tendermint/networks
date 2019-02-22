@@ -60,8 +60,9 @@ func (s *WebSocketsServer) OnStart() error {
 	}
 
 	go func(s_ *WebSocketsServer) {
+		s_.Logger.Info("Starting up WebSockets server", "addr", s_.bindAddr)
 		if err := s_.httpServer.ListenAndServe(); err != nil {
-			s_.Logger.WithError(err).Infoln("WebSockets server shut down")
+			s_.Logger.Info("WebSockets server shut down", "err", err)
 		}
 	}(s)
 
@@ -70,10 +71,11 @@ func (s *WebSocketsServer) OnStart() error {
 
 // OnShutdown will attempt to cleanly shut down the WebSockets server.
 func (s *WebSocketsServer) OnShutdown() error {
+	s.Logger.Debug("Shutting down WebSockets server")
 	if err := s.httpServer.Shutdown(context.Background()); err != nil {
-		s.Logger.WithError(err).Errorln("Failed to cleanly shut down WebSockets server")
+		s.Logger.Error("Failed to cleanly shut down WebSockets server", "err", err)
 	} else {
-		s.Logger.Infoln("WebSockets server successfully shut down")
+		s.Logger.Info("WebSockets server successfully shut down")
 	}
 	return nil
 }
@@ -82,22 +84,22 @@ func (s *WebSocketsServer) OnShutdown() error {
 func (s *WebSocketsServer) transportHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.Logger.WithError(err).Errorln("Failed to upgrade incoming WebSockets connection")
+		s.Logger.Error("Failed to upgrade incoming WebSockets connection", "err", err)
 		return
 	}
 	client, err := s.clientFactory(conn)
 	if err != nil {
-		s.Logger.WithError(err).Errorln("Failed to instantiate actor from client factory to deal with WebSockets connection")
+		s.Logger.Error("Failed to instantiate actor from client factory to deal with WebSockets connection", "err", err)
 		webSocketsClose(conn)
 		return
 	}
 	if err = client.Start(); err != nil {
-		s.Logger.WithError(err).Errorln("Failed to start client actor to deal with WebSockets connection")
+		s.Logger.Error("Failed to start client actor to deal with WebSockets connection", "err", err)
 		webSocketsClose(conn)
 		return
 	}
 	// wait for the client to terminate
 	if err = client.Wait(); err != nil {
-		s.Logger.WithError(err).Errorln("Failed when waiting for client to shut down")
+		s.Logger.Error("Failed when waiting for client to shut down", "err", err)
 	}
 }

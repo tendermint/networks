@@ -54,8 +54,8 @@ func NewTestHarnessClient(parent *TestHarness, interactor TestHarnessClientInter
 	c := &TestHarnessClient{
 		parent:            parent,
 		interactor:        interactor,
-		clientStopChan:    make(chan bool),
-		clientStoppedChan: make(chan bool),
+		clientStopChan:    make(chan bool, 2),
+		clientStoppedChan: make(chan bool, 2),
 	}
 	c.BaseActor = actor.NewBaseActor(c, "test-harness-client")
 	return c

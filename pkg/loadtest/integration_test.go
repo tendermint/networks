@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/tendermint/networks/internal/logging"
 	"github.com/tendermint/networks/pkg/loadtest"
 )
 
@@ -45,13 +47,14 @@ func (s *sharedKVStoreState) get(key string) (string, error) {
 // interacting with two mock `kvstore` proxy apps running on fake Tendermint RPC
 // nodes.
 func TestFullIntegrationHTTPKVStore(t *testing.T) {
+	logger := logging.NewLogger("test")
 	cfg := testConfig(2, "kvstore_http")
 
 	state := newSharedKVStoreState()
 
 	errc := make(chan error, 10)
-	tm1stopc, tm2stopc := make(chan bool), make(chan bool)
-	tm1donec, tm2donec := make(chan bool), make(chan bool)
+	tm1stopc, tm2stopc := make(chan bool, 1), make(chan bool, 1)
+	tm1donec, tm2donec := make(chan bool, 1), make(chan bool, 1)
 
 	// fire up the mock Tendermint HTTP RPC servers
 	tm1Host, tm1Port := getFreeTCPAddress()
@@ -76,29 +79,45 @@ func TestFullIntegrationHTTPKVStore(t *testing.T) {
 	}
 
 	// start the master and 2 slaves
-	masterc := make(chan error)
+	masterc := make(chan error, 1)
 	go func() { masterc <- loadtest.RunMasterWithConfig(cfg) }()
 
-	slave1c := make(chan error)
+	logger.Debug("Waiting for master to start up...")
+	// wait for the master to start up
+	for {
+		c, err := net.Dial("tcp", cfg.Slave.Master)
+		if err == nil {
+			c.Close()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	logger.Debug("Master started. Running slaves...")
+
+	slave1c := make(chan error, 1)
 	go func() { slave1c <- loadtest.RunSlaveWithConfig(cfg) }()
 
-	slave2c := make(chan error)
+	slave2c := make(chan error, 1)
 	go func() { slave2c <- loadtest.RunSlaveWithConfig(cfg) }()
 
 	// wait for the master and slaves to finish and shut down
+loop:
 	for i := 0; i < 3; i++ {
 		select {
 		case err := <-masterc:
 			if err != nil {
 				t.Error(err)
+				break loop
 			}
 		case err := <-slave1c:
 			if err != nil {
 				t.Error(err)
+				break loop
 			}
 		case err := <-slave2c:
 			if err != nil {
 				t.Error(err)
+				break loop
 			}
 
 		case <-time.After(10 * time.Second):
