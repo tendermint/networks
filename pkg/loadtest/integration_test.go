@@ -47,7 +47,7 @@ func (s *sharedKVStoreState) get(key string) (string, error) {
 // interacting with two mock `kvstore` proxy apps running on fake Tendermint RPC
 // nodes.
 func TestFullIntegrationHTTPKVStore(t *testing.T) {
-	logger := logging.NewLogger("test")
+	logger := logging.NewLogrusLogger("test")
 	cfg := testConfig(2, "kvstore_http")
 
 	state := newSharedKVStoreState()

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tendermint/networks/internal/logging"
 	"github.com/tendermint/networks/pkg/loadtest"
 )
 
@@ -38,6 +39,138 @@ func TestSummaryStats(t *testing.T) {
 		}
 		if tc.binCount != count {
 			t.Fatal("Expected bin", tc.bin, "to contain value", tc.binCount, ", but was", count)
+		}
+	}
+}
+
+func TestClientSummaryStatsMerging(t *testing.T) {
+	testCases := []struct {
+		summaries []*loadtest.ClientSummaryStats
+		expected  *loadtest.ClientSummaryStats
+	}{
+		// TEST CASE 1: Single summary in
+		{
+			summaries: []*loadtest.ClientSummaryStats{
+				&loadtest.ClientSummaryStats{
+					Interactions: &loadtest.SummaryStats{
+						Count:     10,
+						Errors:    0,
+						TotalTime: 10000,
+						AvgTime:   1000.0,
+						MinTime:   1000,
+						MaxTime:   1000,
+						TimeBins: map[int]int{
+							0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
+						},
+						ErrorsByType: map[string]int{},
+						Timeout:      5000,
+						BinSize:      1000,
+						BinCount:     6,
+					},
+					Requests: map[string]*loadtest.SummaryStats{},
+				},
+			},
+			expected: &loadtest.ClientSummaryStats{
+				Interactions: &loadtest.SummaryStats{
+					Count:     10,
+					Errors:    0,
+					TotalTime: 10000,
+					AvgTime:   1000.0,
+					MinTime:   1000,
+					MaxTime:   1000,
+					TimeBins: map[int]int{
+						0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
+					},
+					ErrorsByType: map[string]int{},
+					Timeout:      5000,
+					BinSize:      1000,
+					BinCount:     6,
+				},
+				Requests: map[string]*loadtest.SummaryStats{},
+			},
+		},
+		// TEST CASE 2: Two summaries
+		{
+			summaries: []*loadtest.ClientSummaryStats{
+				&loadtest.ClientSummaryStats{
+					Interactions: &loadtest.SummaryStats{
+						Count:     10,
+						Errors:    0,
+						TotalTime: 10000,
+						AvgTime:   1000.0,
+						MinTime:   1000,
+						MaxTime:   1000,
+						TimeBins: map[int]int{
+							0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
+						},
+						ErrorsByType: map[string]int{},
+						Timeout:      5000,
+						BinSize:      1000,
+						BinCount:     6,
+					},
+					Requests: map[string]*loadtest.SummaryStats{},
+				},
+				&loadtest.ClientSummaryStats{
+					Interactions: &loadtest.SummaryStats{
+						Count:     10,
+						Errors:    0,
+						TotalTime: 20000,
+						AvgTime:   2000.0,
+						MinTime:   2000,
+						MaxTime:   2000,
+						TimeBins: map[int]int{
+							0: 0, 1000: 0, 2000: 10, 3000: 0, 4000: 0, 5000: 0,
+						},
+						ErrorsByType: map[string]int{},
+						Timeout:      5000,
+						BinSize:      1000,
+						BinCount:     6,
+					},
+					Requests: map[string]*loadtest.SummaryStats{},
+				},
+			},
+			expected: &loadtest.ClientSummaryStats{
+				Interactions: &loadtest.SummaryStats{
+					Count:     20,
+					Errors:    0,
+					TotalTime: 30000,
+					AvgTime:   1500.0,
+					MinTime:   1000,
+					MaxTime:   2000,
+					TimeBins: map[int]int{
+						0: 0, 1000: 10, 2000: 10, 3000: 0, 4000: 0, 5000: 0,
+					},
+					ErrorsByType: map[string]int{},
+					Timeout:      5000,
+					BinSize:      1000,
+					BinCount:     6,
+				},
+				Requests: map[string]*loadtest.SummaryStats{},
+			},
+		},
+	}
+	logger := logging.NewLogrusLogger("test")
+	for i, tc := range testCases {
+		actual := &loadtest.ClientSummaryStats{
+			Interactions: &loadtest.SummaryStats{
+				TimeBins: map[int]int{
+					0: 0, 1000: 0, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
+				},
+				Timeout:  5000,
+				BinSize:  1000,
+				BinCount: 6,
+			},
+			Requests: map[string]*loadtest.SummaryStats{},
+		}
+		for _, stats := range tc.summaries {
+			actual.Merge(stats)
+		}
+		actual.Compute()
+
+		if !tc.expected.Equals(actual, logger) {
+			t.Errorf("Test case %d: Expected %v but got %v", i, tc.expected, actual)
+		} else {
+			t.Logf("Test case %d: SUCCESS. Matched %v to %v", i, tc.expected, actual)
 		}
 	}
 }

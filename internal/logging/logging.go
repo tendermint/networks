@@ -6,25 +6,49 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Logger is a thread-safe logger whose properties persist and can be modified.
-type Logger struct {
+// Logger is the interface to our internal logger.
+type Logger interface {
+	Debug(msg string, kvpairs ...interface{})
+	Info(msg string, kvpairs ...interface{})
+	Error(msg string, kvpairs ...interface{})
+	SetField(key string, val interface{})
+	PushFields()
+	PopFields()
+}
+
+// LogrusLogger is a thread-safe logger whose properties persist and can be modified.
+type LogrusLogger struct {
 	logger *logrus.Entry
 	ctx    string
 	fields map[string]interface{}
 	mtx    *sync.Mutex
+
+	pushedFieldSets []map[string]interface{}
 }
 
-// NewLogger will instantiate a logger with the given context.
-func NewLogger(ctx string, kvpairs ...interface{}) *Logger {
-	return &Logger{
-		logger: logrus.WithField("ctx", ctx),
-		ctx:    ctx,
-		fields: serializeKVPairs(kvpairs),
-		mtx:    &sync.Mutex{},
+// NoopLogger implements Logger, but does nothing.
+type NoopLogger struct{}
+
+// LogrusLogger implements Logger
+var _ Logger = (*LogrusLogger)(nil)
+var _ Logger = (*NoopLogger)(nil)
+
+//
+// LogrusLogger
+//
+
+// NewLogrusLogger will instantiate a logger with the given context.
+func NewLogrusLogger(ctx string, kvpairs ...interface{}) Logger {
+	return &LogrusLogger{
+		logger:          logrus.WithField("ctx", ctx),
+		ctx:             ctx,
+		fields:          serializeKVPairs(kvpairs),
+		mtx:             &sync.Mutex{},
+		pushedFieldSets: []map[string]interface{}{},
 	}
 }
 
-func (l *Logger) withFields() *logrus.Entry {
+func (l *LogrusLogger) withFields() *logrus.Entry {
 	if len(l.fields) > 0 {
 		return l.logger.WithFields(l.fields)
 	}
@@ -41,7 +65,7 @@ func serializeKVPairs(kvpairs ...interface{}) map[string]interface{} {
 	return res
 }
 
-func (l *Logger) withKVPairs(kvpairs ...interface{}) *logrus.Entry {
+func (l *LogrusLogger) withKVPairs(kvpairs ...interface{}) *logrus.Entry {
 	fields := serializeKVPairs(kvpairs...)
 	if len(fields) > 0 {
 		return l.withFields().WithFields(fields)
@@ -49,26 +73,58 @@ func (l *Logger) withKVPairs(kvpairs ...interface{}) *logrus.Entry {
 	return l.withFields()
 }
 
-func (l *Logger) Debug(msg string, kvpairs ...interface{}) {
+func (l *LogrusLogger) Debug(msg string, kvpairs ...interface{}) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.withKVPairs(kvpairs...).Debugln(msg)
 }
 
-func (l *Logger) Info(msg string, kvpairs ...interface{}) {
+func (l *LogrusLogger) Info(msg string, kvpairs ...interface{}) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.withKVPairs(kvpairs...).Infoln(msg)
 }
 
-func (l *Logger) Error(msg string, kvpairs ...interface{}) {
+func (l *LogrusLogger) Error(msg string, kvpairs ...interface{}) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.withKVPairs(kvpairs...).Errorln(msg)
 }
 
-func (l *Logger) SetField(key string, val interface{}) {
+func (l *LogrusLogger) SetField(key string, val interface{}) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.fields[key] = val
 }
+
+func (l *LogrusLogger) PushFields() {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+	l.pushedFieldSets = append(l.pushedFieldSets, l.fields)
+}
+
+func (l *LogrusLogger) PopFields() {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+	pfsLen := len(l.pushedFieldSets)
+	if pfsLen > 0 {
+		l.fields = l.pushedFieldSets[pfsLen-1]
+		l.pushedFieldSets = l.pushedFieldSets[:pfsLen-1]
+	}
+}
+
+//
+// NoopLogger
+//
+
+// NewNoopLogger will instantiate a logger that does nothing when called.
+func NewNoopLogger() Logger {
+	return &NoopLogger{}
+}
+
+func (l *NoopLogger) Debug(msg string, kvpairs ...interface{}) {}
+func (l *NoopLogger) Info(msg string, kvpairs ...interface{})  {}
+func (l *NoopLogger) Error(msg string, kvpairs ...interface{}) {}
+func (l *NoopLogger) SetField(key string, val interface{})     {}
+func (l *NoopLogger) PushFields()                              {}
+func (l *NoopLogger) PopFields()                               {}

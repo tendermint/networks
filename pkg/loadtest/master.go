@@ -282,7 +282,6 @@ func (n *MasterNode) recvCheckLoop() {
 }
 
 func (n *MasterNode) slaveFinished(msg actor.Message) {
-	n.Logger.Debug("In slaveFinished()")
 	data := msg.Data.(SlaveFinishedMessage)
 	id := data.ID
 	stats := data.Stats
@@ -292,8 +291,7 @@ func (n *MasterNode) slaveFinished(msg actor.Message) {
 		return
 	}
 
-	n.Logger.Debug("About to combine stats")
-	n.stats.Combine(&stats)
+	n.stats.Merge(&stats)
 	n.removeRemoteSlave(id)
 	n.Logger.Info("Slave completed load testing", "id", id)
 

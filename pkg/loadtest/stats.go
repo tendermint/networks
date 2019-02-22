@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/tendermint/networks/internal/logging"
 )
 
 // DefaultStatsHistogramBins specifies the number of bins that make up a
@@ -146,19 +148,24 @@ func (s *SummaryStats) TimeAndAdd(req func() error) {
 	s.Add(rs.TimeTaken, rs.Err)
 }
 
-// Combine will add the stats from the given summary into this one. Assumes that
+// Merge will add the stats from the given summary into this one. Assumes that
 // `o` has the exact same time bin configuration as `i`.
-func (s *SummaryStats) Combine(o *SummaryStats) {
+func (s *SummaryStats) Merge(o *SummaryStats) {
+	if s.Count == 0 {
+		s.MinTime = o.MinTime
+		s.MaxTime = o.MaxTime
+	} else {
+		if o.MinTime < s.MinTime {
+			s.MinTime = o.MinTime
+		}
+		if o.MaxTime > s.MaxTime {
+			s.MaxTime = o.MaxTime
+		}
+	}
+
 	s.TotalTime += o.TotalTime
 	s.Count += o.Count
 	s.Errors += o.Errors
-
-	if o.MinTime < s.MinTime {
-		s.MinTime = o.MinTime
-	}
-	if o.MaxTime > s.MaxTime {
-		s.MaxTime = o.MaxTime
-	}
 
 	// combine the counts from the bins
 	for bin := int64(0); bin <= s.Timeout; bin += s.BinSize {
@@ -193,6 +200,97 @@ func (s *SummaryStats) PrintTimeBins() {
 	}
 }
 
+// Equals will compare this summary stats object to the given one and, if a
+// logger is specified it will be used to output debug information about which
+// fields are different between the two objects.
+func (s *SummaryStats) Equals(o *SummaryStats, loggers ...logging.Logger) bool {
+	equal := true
+	logger := logging.NewNoopLogger()
+	if len(loggers) > 0 {
+		logger = loggers[0]
+	}
+
+	if s.Count != o.Count {
+		logger.Debug("Field mismatch", "s.Count", s.Count, "o.Count", o.Count)
+		equal = false
+	}
+	if s.Errors != o.Errors {
+		logger.Debug("Field mismatch", "s.Errors", s.Errors, "o.Errors", o.Errors)
+		equal = false
+	}
+	if s.TotalTime != o.TotalTime {
+		logger.Debug("Field mismatch", "s.TotalTime", s.TotalTime, "o.TotalTime", o.TotalTime)
+		equal = false
+	}
+	if s.AvgTime != o.AvgTime {
+		logger.Debug("Field mismatch", "s.AvgTime", s.AvgTime, "o.AvgTime", o.AvgTime)
+		equal = false
+	}
+	if s.MinTime != o.MinTime {
+		logger.Debug("Field mismatch", "s.MinTime", s.MinTime, "o.MinTime", o.MinTime)
+		equal = false
+	}
+	if s.MaxTime != o.MaxTime {
+		logger.Debug("Field mismatch", "s.MaxTime", s.MaxTime, "o.MaxTime", o.MaxTime)
+		equal = false
+	}
+	if s.Timeout != o.Timeout {
+		logger.Debug("Field mismatch", "s.Timeout", s.Timeout, "o.Timeout", o.Timeout)
+		equal = false
+	}
+	if s.BinSize != o.BinSize {
+		logger.Debug("Field mismatch", "s.BinSize", s.BinSize, "o.BinSize", o.BinSize)
+		equal = false
+	}
+	if s.BinCount != o.BinCount {
+		logger.Debug("Field mismatch", "s.BinCount", s.BinCount, "o.BinCount", o.BinCount)
+		equal = false
+	}
+
+	if !s.timeBinsEqual(o.TimeBins) {
+		logger.Debug("Field mismatch", "s.TimeBins", s.TimeBins, "o.TimeBins", o.TimeBins)
+		equal = false
+	}
+	if !s.errorsByTypeEqual(o.ErrorsByType) {
+		logger.Debug("Field mismatch", "s.ErrorsByType", s.ErrorsByType, "o.ErrorsByType", o.ErrorsByType)
+		equal = false
+	}
+
+	return equal
+}
+
+func (s *SummaryStats) timeBinsEqual(o map[int]int) bool {
+	if len(s.TimeBins) != len(o) {
+		return false
+	}
+	for bin, count := range s.TimeBins {
+		ocount, ok := o[bin]
+		if !ok {
+			return false
+		}
+		if ocount != count {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *SummaryStats) errorsByTypeEqual(o map[string]int) bool {
+	if len(s.ErrorsByType) != len(o) {
+		return false
+	}
+	for err, count := range s.ErrorsByType {
+		ocount, ok := o[err]
+		if !ok {
+			return false
+		}
+		if ocount != count {
+			return false
+		}
+	}
+	return true
+}
+
 // SummaryCSV compiles the summary statistics into a line that can be written to
 // a CSV file.
 func (s *SummaryStats) SummaryCSV() []string {
@@ -205,22 +303,98 @@ func (s *SummaryStats) SummaryCSV() []string {
 	}
 }
 
+func (s *SummaryStats) String() string {
+	return fmt.Sprintf(`SummaryStats{
+	Count:        %d
+	Errors:       %d
+	TotalTime:    %d
+	AvgTime:      %.3f
+	MinTime:      %d
+	MaxTime:      %d
+	TimeBins:     %v
+	ErrorsByType: %v
+	Timeout:      %d
+	BinSize:      %d
+	BinCount:     %d
+}
+`,
+		s.Count,
+		s.Errors,
+		s.TotalTime,
+		s.AvgTime,
+		s.MinTime,
+		s.MaxTime,
+		s.TimeBins,
+		s.ErrorsByType,
+		s.Timeout,
+		s.BinSize,
+		s.BinCount,
+	)
+}
+
 //
 // ClientSummaryStats
 //
 
-// Combine will combine the given client summary stats with this one.
-func (c *ClientSummaryStats) Combine(o *ClientSummaryStats) {
-	c.Interactions.Combine(o.Interactions)
+// Merge will combine the given client summary stats with this one.
+func (c *ClientSummaryStats) Merge(o *ClientSummaryStats) {
+	c.Interactions.Merge(o.Interactions)
 	for reqID, stats := range o.Requests {
 		if _, ok := c.Requests[reqID]; ok {
 			// if we've already seen this request before, combine them
-			c.Requests[reqID].Combine(stats)
+			c.Requests[reqID].Merge(stats)
 		} else {
 			// if we haven't, make a copy of the other's stats
 			c.Requests[reqID] = &(*stats)
 		}
 	}
+}
+
+// Compute does a recursive Compute call on internal objects.
+func (c *ClientSummaryStats) Compute() {
+	c.Interactions.Compute()
+	for _, rs := range c.Requests {
+		rs.Compute()
+	}
+}
+
+// Equals does a deep comparison of this object to `o`, optionally using a
+// logger to output more detailed (debug-level) information on what the
+// differences are between the two structures.
+func (c *ClientSummaryStats) Equals(o *ClientSummaryStats, loggers ...logging.Logger) bool {
+	logger := logging.NewNoopLogger()
+	if len(loggers) > 0 {
+		logger = loggers[0]
+	}
+	logger.PushFields()
+
+	logger.SetField("field", "Interactions")
+	equal := c.Interactions.Equals(o.Interactions, logger)
+
+	logger.SetField("field", "Requests")
+	if len(c.Requests) != len(o.Requests) {
+		equal = false
+		logger.Debug(
+			"c.Requests and o.Requests have different sizes",
+			"len(c.Requests)", len(c.Requests),
+			"len(o.Requests)", len(o.Requests),
+		)
+	}
+	for reqID, req := range c.Requests {
+		logger.SetField("reqID", reqID)
+		oreq, ok := o.Requests[reqID]
+		if !ok {
+			logger.Debug("o.Requests is missing entry", "reqID", reqID)
+			equal = false
+		} else {
+			if !req.Equals(oreq, logger) {
+				equal = false
+			}
+		}
+	}
+
+	logger.PopFields()
+	return equal
 }
 
 // WriteSummary will output CSV data using the given writer.

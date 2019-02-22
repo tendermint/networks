@@ -40,7 +40,7 @@ var _ Actor = (*BaseActor)(nil)
 // BaseActor is a convenience class from which we can derive other actors. This
 // is effectively an "abstract class" and should be treated as such.
 type BaseActor struct {
-	Logger *logging.Logger
+	Logger logging.Logger
 
 	impl Actor  // The implementation/derived class for this actor.
 	ctx  string // The context string for logging.
@@ -69,7 +69,7 @@ func NewBaseActor(impl Actor, ctx string, inboxSizes ...int) *BaseActor {
 		impl:                 impl,
 		ctx:                  ctx,
 		id:                   id,
-		Logger:               logging.NewLogger(ctx, "id", id),
+		Logger:               logging.NewLogrusLogger(ctx, "id", id),
 		inboxChan:            make(chan Message, inboxSize),
 		shutdownChan:         make(chan bool, 2),
 		shutdownCompleteChan: make(chan bool, 2),

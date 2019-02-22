@@ -178,9 +178,8 @@ func (th *TestHarness) broadcast(msg actor.Message) {
 
 func (th *TestHarness) clientFinished(msg actor.Message) {
 	data := msg.Data.(ClientStatsMessage)
-	th.Logger.Info("Got client finished notification", "data", data)
 	id := data.ID
-	th.stats.Combine(data.Stats)
+	th.stats.Merge(data.Stats)
 	th.removeClient(id)
 	// if all the clients have finished
 	if th.clientCount() == 0 {
@@ -236,5 +235,5 @@ func (th *TestHarness) waitForAllClients() {
 
 func (th *TestHarness) clientStats(msg actor.Message) {
 	stats := msg.Data.(ClientStatsMessage).Stats
-	th.stats.Combine(stats)
+	th.stats.Merge(stats)
 }
