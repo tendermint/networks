@@ -33,7 +33,7 @@ ecs: &ecs
 tools_defaults: &tools_defaults
   working_directory: /go/src/github.com/tendermint/networks
   docker:
-    - image: circleci/golang:1.11.4
+    - image: circleci/golang:1.11.5
   environment:
     GOBIN: /tmp/workspace/bin
 
