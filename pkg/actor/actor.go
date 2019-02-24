@@ -267,10 +267,8 @@ func (a *BaseActor) Unsubscribe(sub Actor, msgTypes ...MessageType) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 	for _, mt := range msgTypes {
-		if _, mtOK := a.subscriptions[mt]; mtOK {
-			if _, idOK := a.subscriptions[mt][sub.GetID()]; idOK {
-				delete(a.subscriptions[mt], sub.GetID())
-			}
+		if _, ok := a.subscriptions[mt]; ok {
+			delete(a.subscriptions[mt], sub.GetID())
 		}
 	}
 }
