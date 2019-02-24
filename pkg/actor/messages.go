@@ -11,9 +11,10 @@ type MessageType string
 
 // Generic message types for actor communication.
 const (
-	Ping       MessageType = "ping"
-	Pong       MessageType = "pong"
-	PoisonPill MessageType = "poison-pill"
+	Ping                MessageType = "ping"
+	Pong                MessageType = "pong"
+	PoisonPill          MessageType = "poison-pill"
+	SubscriptionMessage MessageType = "subscription-message"
 )
 
 // MaxDeadLetterMessages puts a maximum size on the dead letter inbox.
@@ -50,6 +51,7 @@ func init() {
 	RegisterMessageParser(Ping, ParseMessageWithNoData)
 	RegisterMessageParser(Pong, ParseMessageWithNoData)
 	RegisterMessageParser(PoisonPill, ParseMessageWithNoData)
+	RegisterMessageParser(SubscriptionMessage, ParseSubscriptionMessage)
 }
 
 // DeadLetterInbox provides access to the global dead letter inbox for
@@ -130,4 +132,10 @@ func RegisterMessageParser(mt MessageType, p MessageParser) {
 // consequence, and thus returns nil for the data field.
 func ParseMessageWithNoData(data json.RawMessage) (interface{}, error) {
 	return nil, nil
+}
+
+// ParseSubscriptionMessage will parse the given data as though it is another
+// embedded actor message.
+func ParseSubscriptionMessage(data json.RawMessage) (interface{}, error) {
+	return ParseJSONMessage(string(data))
 }

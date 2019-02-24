@@ -11,6 +11,7 @@ type testActor struct {
 	*actor.BaseActor
 
 	testChan     chan actor.Message
+	subsChan     chan actor.Message
 	startupChan  chan bool
 	shutdownChan chan bool
 }
@@ -19,7 +20,8 @@ var _ actor.Actor = (*testActor)(nil)
 
 func newTestActor() *testActor {
 	t := &testActor{
-		testChan:     make(chan actor.Message),
+		testChan:     make(chan actor.Message, 1),
+		subsChan:     make(chan actor.Message, 1),
 		startupChan:  make(chan bool, 1),
 		shutdownChan: make(chan bool, 1),
 	}
@@ -38,8 +40,12 @@ func (t *testActor) OnShutdown() error {
 }
 
 func (t *testActor) Handle(m actor.Message) {
-	if m.Type == actor.Ping {
+	switch m.Type {
+	case actor.Ping:
 		t.testChan <- actor.Message{Type: actor.Pong}
+
+	case actor.SubscriptionMessage:
+		t.subsChan <- m
 	}
 }
 
@@ -117,5 +123,71 @@ func TestPoisonPill(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timed out waiting for poison pill to kill actor")
+	}
+}
+
+func TestPubSub(t *testing.T) {
+	pub := newTestActor()
+	if err := pub.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	sub := newTestActor()
+	if err := sub.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	pubDone := make(chan error, 1)
+	go func() {
+		pubDone <- pub.Wait()
+	}()
+	subDone := make(chan error, 1)
+	go func() {
+		subDone <- sub.Wait()
+	}()
+
+	pub.Subscribe(sub, actor.Ping)
+	sub.Send(pub, actor.Message{Type: actor.Ping})
+
+	select {
+	case msg := <-sub.subsChan:
+		if msg.Type != actor.SubscriptionMessage {
+			t.Errorf("Incorrect message type received. Expected %s, but got %s", actor.SubscriptionMessage, msg.Type)
+		} else {
+			t.Log("Successfully received subscription message")
+			data, ok := msg.Data.(actor.Message)
+			if !ok {
+				t.Error("Expected msg.Data to be of type actor.Message, but was not")
+			} else {
+				if data.Type != actor.Ping {
+					t.Errorf("Incorrect embedded message type. Expected %s, but got %s", actor.Ping, data.Type)
+				} else {
+					if data.Sender.GetID() != sub.GetID() {
+						t.Errorf("Incorrect sender for original message. Expected ID %s, but got ID %s", sub.GetID(), data.Sender.GetID())
+					}
+				}
+			}
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Timed out waiting for message from subscriber")
+	}
+
+	// either way we're done with these actors
+	pub.Recv(actor.Message{Type: actor.PoisonPill})
+	sub.Recv(actor.Message{Type: actor.PoisonPill})
+
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-pubDone:
+			if err != nil {
+				t.Error(err)
+			}
+		case err := <-subDone:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timed out waiting for actor to shut down")
+		}
 	}
 }

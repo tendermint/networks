@@ -33,6 +33,10 @@ type Actor interface {
 	// Lifecycle events
 	OnStart() error
 	OnShutdown() error
+
+	// Pub/Sub functionality
+	Subscribe(sub Actor, msgTypes ...MessageType)
+	Unsubscribe(sub Actor, msgTypes ...MessageType)
 }
 
 var _ Actor = (*BaseActor)(nil)
@@ -52,6 +56,8 @@ type BaseActor struct {
 	shutdownStarted      bool
 	shutdownCompleted    bool
 	shutdownErr          error
+
+	subscriptions map[MessageType]map[string]Actor // MessageType -> Actor.GetID() -> Actor
 
 	mtx *sync.RWMutex
 }
@@ -76,6 +82,7 @@ func NewBaseActor(impl Actor, ctx string, inboxSizes ...int) *BaseActor {
 		shutdownStarted:      false,
 		shutdownCompleted:    false,
 		shutdownErr:          nil,
+		subscriptions:        make(map[MessageType]map[string]Actor),
 		mtx:                  &sync.RWMutex{},
 	}
 	return a
@@ -209,6 +216,8 @@ func (a *BaseActor) SetID(id string) {
 // Handle will, by default, just check if we have an implementation actor class
 // and calls that implementation's Handle method.
 func (a *BaseActor) Handle(m Message) {
+	a.publishToSubscribers(m)
+
 	switch m.Type {
 	case PoisonPill:
 		a.Shutdown()
@@ -234,5 +243,44 @@ func (a *BaseActor) Send(other Actor, msg Message) {
 		other.Recv(msg)
 	} else {
 		RouteToDeadLetterInbox(msg)
+	}
+}
+
+// Subscribe will set up a subscription such that, when this actor receives
+// messages of the given types, they will be published to `sub`.
+func (a *BaseActor) Subscribe(sub Actor, msgTypes ...MessageType) {
+	a.Logger.Debug("Subscribing actor to incoming message types", "id", sub.GetID(), "msgTypes", msgTypes)
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	for _, mt := range msgTypes {
+		if _, ok := a.subscriptions[mt]; !ok {
+			a.subscriptions[mt] = make(map[string]Actor)
+		}
+		a.subscriptions[mt][sub.GetID()] = sub
+	}
+}
+
+// Unsubscribe will remove any subscriptions to the given message types by the
+// given subscriber.
+func (a *BaseActor) Unsubscribe(sub Actor, msgTypes ...MessageType) {
+	a.Logger.Debug("Unsubscribing actor from incoming message types", "id", sub.GetID(), "msgTypes", msgTypes)
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+	for _, mt := range msgTypes {
+		if _, mtOK := a.subscriptions[mt]; mtOK {
+			if _, idOK := a.subscriptions[mt][sub.GetID()]; idOK {
+				delete(a.subscriptions[mt], sub.GetID())
+			}
+		}
+	}
+}
+
+func (a *BaseActor) publishToSubscribers(msg Message) {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+	if _, ok := a.subscriptions[msg.Type]; ok {
+		for _, sub := range a.subscriptions[msg.Type] {
+			a.Send(sub, Message{Type: SubscriptionMessage, Data: msg})
+		}
 	}
 }
