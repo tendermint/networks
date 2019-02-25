@@ -52,7 +52,6 @@ func (s *remoteSlave) OnShutdown() error {
 }
 
 func (s *remoteSlave) Handle(msg actor.Message) {
-	s.Logger.Debug("Got message", "msg", msg)
 	switch msg.Type {
 	case ConnectionClosed:
 		// inform the master that the connection was closed

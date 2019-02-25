@@ -2,6 +2,7 @@ package loadtest
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/tendermint/networks/pkg/actor"
@@ -34,8 +35,8 @@ type SlaveIDMessage struct {
 }
 
 type SlaveFinishedMessage struct {
-	ID    string             `json:"id"`
-	Stats ClientSummaryStats `json:"stats"`
+	ID    string              `json:"id"`
+	Stats *ClientSummaryStats `json:"stats"`
 }
 
 type RecvMessageConfig struct {
@@ -80,4 +81,12 @@ func ParseSlaveFinishedMessage(data json.RawMessage) (interface{}, error) {
 		return nil, err
 	}
 	return msg, nil
+}
+
+func (m SlaveIDMessage) String() string {
+	return fmt.Sprintf("SlaveIDMessage{ID: %s}", m.ID)
+}
+
+func (m SlaveFinishedMessage) String() string {
+	return fmt.Sprintf("SlaveFinishedMessage{ID: %s, Stats: %v}", m.ID, m.Stats)
 }

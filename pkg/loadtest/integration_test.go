@@ -2,6 +2,7 @@ package loadtest_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tendermint/networks/internal/logging"
+	"github.com/tendermint/networks/pkg/actor"
 	"github.com/tendermint/networks/pkg/loadtest"
 )
 
@@ -78,9 +80,24 @@ func TestFullIntegrationHTTPKVStore(t *testing.T) {
 		},
 	}
 
+	// start a probe actor to listen for the stats
+	probe := actor.NewProbe()
+	if err := probe.Start(); err != nil {
+		t.Fatal(err)
+	}
+
 	// start the master and 2 slaves
 	masterc := make(chan error, 1)
-	go func() { masterc <- loadtest.RunMasterWithConfig(cfg) }()
+	go func() {
+		master := loadtest.NewMasterNode(cfg)
+		if err := master.Start(); err != nil {
+			masterc <- err
+			return
+		}
+		// subscribe to the final stats messages
+		master.Subscribe(probe, loadtest.SlaveFinished)
+		masterc <- master.Wait()
+	}()
 
 	logger.Debug("Waiting for master to start up...")
 	timeoutCounter := 10
@@ -136,6 +153,60 @@ loop:
 		}
 	}
 
+	// wait for the probe to have captured 2 messages
+	err := probe.WaitForCapturedMessages(2, 2*time.Second)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// check the probe to see if it's successfully captured the messages
+	statsMessages := probe.CapturedMessages()
+	if len(statsMessages) != 2 {
+		t.Errorf("Expected number of captured SlaveFinished messages to be 2, but got %d", len(statsMessages))
+	} else {
+		stats := loadtest.NewClientSummaryStats(time.Duration(cfg.Clients.InteractionTimeout))
+		slave0Stats := statsMessages[0].Data.(loadtest.SlaveFinishedMessage).Stats
+		slave1Stats := statsMessages[1].Data.(loadtest.SlaveFinishedMessage).Stats
+
+		stats.Merge(slave0Stats)
+		stats.Merge(slave1Stats)
+
+		// we have 2 slaves, each with 1 client
+		maxInteractions := int64(cfg.Clients.MaxInteractions * 2)
+		if stats.Interactions.Count != maxInteractions {
+			t.Errorf("Expected number of interactions to be %d, but got %d", maxInteractions, stats.Interactions.Count)
+		}
+		if len(stats.Requests) != 2 {
+			t.Errorf("Expected number of request IDs to be 2, but got %d", len(stats.Requests))
+		}
+		bts, ok := stats.Requests["broadcast_tx_sync"]
+		if !ok {
+			t.Error("Expected request stats for broadcast_tx_sync, but got none")
+		} else {
+			if bts.Count != maxInteractions {
+				t.Errorf("Expected number of broadcast_tx_sync requests to be %d, but got %d", maxInteractions, bts.Count)
+			}
+			if bts.Errors != 0 {
+				t.Errorf("Expected number of broadcast_tx_sync errors to be 0, but got %d", bts.Errors)
+			}
+		}
+		aq, ok := stats.Requests["abci_query"]
+		if !ok {
+			t.Error("Expected request stats for abci_query, but got none")
+		} else {
+			if aq.Count != maxInteractions {
+				t.Errorf("Expected number of abci_query requests to be %d, but got %d", maxInteractions, aq.Count)
+			}
+			if aq.Errors != 0 {
+				t.Errorf("Expected number of abci_query errors to be 0, but got %d", aq.Errors)
+			}
+		}
+
+	}
+
+	// shut the probe down
+	probe.Recv(actor.Message{Type: actor.PoisonPill})
+
 	// tell the mock HTTP servers to shut down
 	tm1stopc <- true
 	tm2stopc <- true
@@ -149,9 +220,15 @@ loop:
 			t.Error("Timed out waiting for mock HTTP servers to shut down")
 		}
 	}
+
+	// wait for the probe to shut down properly
+	if err := probe.Wait(); err != nil {
+		t.Error(err)
+	}
 }
 
 func mockTendermintHTTPRPCServer(bindAddr string, state *sharedKVStoreState, errc chan error, stopc chan bool, donec chan bool) {
+	testLogger := logging.NewLogrusLogger("mock-http-rpc", "bindAddr", bindAddr)
 	testMux := http.NewServeMux()
 	testMux.HandleFunc("/broadcast_tx_sync", func(w http.ResponseWriter, r *http.Request) {
 		tx := strings.Trim(r.URL.Query().Get("tx"), "\"")
@@ -161,6 +238,8 @@ func mockTendermintHTTPRPCServer(bindAddr string, state *sharedKVStoreState, err
 			w.WriteHeader(400)
 			return
 		}
+
+		testLogger.Debug("Storing key/value pair", "key", parts[0], "value", parts[1])
 
 		// add the key/value pair to the state store
 		state.put(parts[0], parts[1])
@@ -177,14 +256,16 @@ func mockTendermintHTTPRPCServer(bindAddr string, state *sharedKVStoreState, err
 			return
 		}
 
+		testLogger.Debug("Retrieved key/value pair", "key", data, "value", value)
+
 		res := loadtest.ABCIQueryHTTPResponse{
 			JSONRPC: "2.0",
 			ID:      "",
 			Result: loadtest.ABCIQueryResult{
 				Response: loadtest.ABCIQueryResponse{
 					Log:   "found",
-					Key:   data,
-					Value: value,
+					Key:   base64.StdEncoding.EncodeToString([]byte(data)),
+					Value: base64.StdEncoding.EncodeToString([]byte(value)),
 				},
 			},
 		}

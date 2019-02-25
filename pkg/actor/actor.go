@@ -1,7 +1,9 @@
 package actor
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/tendermint/networks/internal/logging"
@@ -9,7 +11,7 @@ import (
 
 // Constants relating to actors.
 const (
-	DefaultActorInboxSize = 1000
+	DefaultActorInboxSize = 5
 )
 
 // Actor is an implementation of the actor pattern.
@@ -28,7 +30,7 @@ type Actor interface {
 	Start() error
 	FailAndShutdown(err error)
 	Shutdown()
-	Wait() error
+	Wait(timeouts ...time.Duration) error
 
 	// Lifecycle events
 	OnStart() error
@@ -99,7 +101,7 @@ func (a *BaseActor) OnShutdown() error { return nil }
 // impl.OnStart method fails, the error will be returned and the event loop will
 // not be started.
 func (a *BaseActor) Start() error {
-	a.Logger.Debug("Starting up")
+	a.Logger.Debug("Starting up", "id", a.GetID())
 	if a.impl != nil {
 		if err := a.impl.OnStart(); err != nil {
 			a.Logger.Error("OnStart event for actor failed", "err", err)
@@ -164,10 +166,22 @@ func (a *BaseActor) Shutdown() {
 
 // Wait will block the current goroutine and wait until the actor's shutdown
 // process is complete.
-func (a *BaseActor) Wait() error {
+func (a *BaseActor) Wait(timeouts ...time.Duration) error {
 	if !a.isShutdownCompleted() {
-		a.Logger.Debug("Waiting for actor to shut down")
-		<-a.shutdownCompleteChan
+		if len(timeouts) > 0 {
+			a.Logger.Debug("Waiting for actor to shut down", "timeout", timeouts[0])
+			select {
+			case <-a.shutdownCompleteChan:
+				a.Logger.Debug("Actor successfully shut down")
+
+			case <-time.After(timeouts[0]):
+				a.setShutdownErr(fmt.Errorf("Timed out (%s) waiting for actor to shut down", timeouts[0]))
+			}
+		} else {
+			a.Logger.Debug("Waiting for actor to shut down")
+			<-a.shutdownCompleteChan
+			a.Logger.Debug("Actor successfully shut down")
+		}
 		a.setShutdownCompleted(true)
 	}
 	return a.getShutdownErr()

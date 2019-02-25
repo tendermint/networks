@@ -77,27 +77,8 @@ func TestBaseActorLifecycle(t *testing.T) {
 	}
 
 	a.Shutdown()
-	done := make(chan error, 1)
-	go func() {
-		done <- a.Wait()
-	}()
-
-	select {
-	case <-a.shutdownChan:
-		t.Log("Successfully called OnShutdown()")
-	case <-time.After(2 * time.Second):
-		t.Fatal("Timed out waiting for actor to call OnShutdown()")
-	}
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Error(err)
-		} else {
-			t.Log("Successfully shut down actor event loop")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Timed out waiting for test actor to shut down")
+	if err := a.Wait(1 * time.Second); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -108,21 +89,8 @@ func TestPoisonPill(t *testing.T) {
 	}
 
 	a.Recv(actor.Message{Type: actor.PoisonPill})
-
-	done := make(chan error, 1)
-	go func() {
-		done <- a.Wait()
-	}()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Error(err)
-		} else {
-			t.Log("Successfully poisoned actor and triggered shutdown")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Timed out waiting for poison pill to kill actor")
+	if err := a.Wait(1 * time.Second); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -136,15 +104,6 @@ func TestPubSub(t *testing.T) {
 	if err := sub.Start(); err != nil {
 		t.Fatal(err)
 	}
-
-	pubDone := make(chan error, 1)
-	go func() {
-		pubDone <- pub.Wait()
-	}()
-	subDone := make(chan error, 1)
-	go func() {
-		subDone <- sub.Wait()
-	}()
 
 	pub.Subscribe(sub, actor.Ping)
 	sub.Send(pub, actor.Message{Type: actor.Ping})
@@ -176,18 +135,50 @@ func TestPubSub(t *testing.T) {
 	pub.Recv(actor.Message{Type: actor.PoisonPill})
 	sub.Recv(actor.Message{Type: actor.PoisonPill})
 
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-pubDone:
-			if err != nil {
-				t.Error(err)
-			}
-		case err := <-subDone:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("Timed out waiting for actor to shut down")
+	if err := pub.Wait(1 * time.Second); err != nil {
+		t.Error(err)
+	}
+	if err := sub.Wait(1 * time.Second); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestProbe(t *testing.T) {
+	pub := newTestActor()
+	if err := pub.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	sub := actor.NewProbe()
+	if err := sub.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	pub.Subscribe(sub, actor.Ping)
+	pub.Recv(actor.Message{Type: actor.Ping})
+
+	err := sub.WaitForCapturedMessages(1, 100*time.Millisecond)
+	if err != nil {
+		t.Error(err)
+	}
+
+	captured := sub.CapturedMessages()
+	if len(captured) != 1 {
+		t.Errorf("Expected number of captured messages to be 1, but got %d", len(captured))
+	} else {
+		if captured[0].Type != actor.Ping {
+			t.Errorf("Expected captured message to be of type %s, but got %s", actor.Ping, captured[0].Type)
 		}
+	}
+
+	// shut the actors down
+	pub.Recv(actor.Message{Type: actor.PoisonPill})
+	sub.Recv(actor.Message{Type: actor.PoisonPill})
+
+	if err := pub.Wait(1 * time.Second); err != nil {
+		t.Error(err)
+	}
+	if err := sub.Wait(1 * time.Second); err != nil {
+		t.Error(err)
 	}
 }

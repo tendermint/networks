@@ -103,7 +103,6 @@ func (n *MasterNode) OnShutdown() error {
 
 // Handle will interpret incoming messages in the master's event loop.
 func (n *MasterNode) Handle(msg actor.Message) {
-	n.Logger.Debug("Got message", "msg", msg)
 	switch msg.Type {
 	case actor.Ping:
 		n.Send(msg.Sender, actor.Message{Type: actor.Pong})
@@ -285,13 +284,13 @@ func (n *MasterNode) slaveFinished(msg actor.Message) {
 	data := msg.Data.(SlaveFinishedMessage)
 	id := data.ID
 	stats := data.Stats
-	if stats.Interactions == nil || len(stats.Requests) == 0 {
+	if len(stats.Requests) == 0 {
 		n.Logger.Error("Missing statistics from slave node")
 		n.FailAndShutdown(NewError(ErrMissingSlaveStats, nil, id))
 		return
 	}
 
-	n.stats.Merge(&stats)
+	n.stats.Merge(stats)
 	n.removeRemoteSlave(id)
 	n.Logger.Info("Slave completed load testing", "id", id)
 

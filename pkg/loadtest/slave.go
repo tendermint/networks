@@ -99,7 +99,7 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 		n.startLoadTesting()
 
 	case TestHarnessFinished:
-		stats := msg.Data.(ClientSummaryStats)
+		stats := msg.Data.(*ClientSummaryStats)
 		n.Logger.Info("Test harness finished load testing")
 		n.Send(n.master, actor.Message{Type: SlaveFinished, Data: SlaveFinishedMessage{ID: n.GetID(), Stats: stats}})
 		n.Shutdown()
@@ -132,12 +132,6 @@ func (n *SlaveNode) setState(newState SlaveState) {
 	n.state = newState
 	n.Logger.Debug("Slave state changed", "state", newState)
 }
-
-// func (n *SlaveNode) getState() SlaveState {
-// 	n.mtx.RLock()
-// 	defer n.mtx.RUnlock()
-// 	return n.state
-// }
 
 func (n *SlaveNode) errorAndShutdown(err ErrorCode) {
 	n.Logger.Error(ErrorMessageForCode(err))

@@ -141,7 +141,7 @@ func mockWebSocketsClient(masterAddr, slaveID string, errc chan error) {
 
 	data := loadtest.SlaveFinishedMessage{
 		ID: slaveID,
-		Stats: loadtest.ClientSummaryStats{
+		Stats: &loadtest.ClientSummaryStats{
 			Interactions: loadtest.NewSummaryStats(5 * time.Second),
 			Requests: map[string]*loadtest.SummaryStats{
 				"request": loadtest.NewSummaryStats(2 * time.Second),

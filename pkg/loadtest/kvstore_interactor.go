@@ -17,6 +17,8 @@ import (
 type KVStoreHTTPInteractor struct {
 	cfg *Config
 
+	//logger logging.Logger
+
 	httpClient http.Client // The configured HTTP client we will be using for our requests.
 	targetURLs []string    // A cached set of base URLs for each target Tendermint node.
 
@@ -69,6 +71,7 @@ func NewKVStoreHTTPInteractor(cfg *Config) *KVStoreHTTPInteractor {
 	}
 	return &KVStoreHTTPInteractor{
 		cfg: cfg,
+		//logger: logging.NewLogrusLogger("kvstore-http-interactor"),
 		httpClient: http.Client{
 			Timeout: time.Duration(cfg.Clients.RequestTimeout),
 		},
@@ -92,9 +95,13 @@ func (i *KVStoreHTTPInteractor) Init() error {
 // 2. Retrieve that value back out again and make sure it's the same as the
 //    value we put in.
 func (i *KVStoreHTTPInteractor) Interact() {
+	time.Sleep(i.requestDelay())
+	//i.logger.Debug("Calling broadcast_tx_sync")
 	t, err := i.putValue()
 	i.addStats("broadcast_tx_sync", t, err)
 
+	time.Sleep(i.requestDelay())
+	//i.logger.Debug("Calling abci_query")
 	t, err = i.getValue()
 	i.addStats("abci_query", t, err)
 }
@@ -104,8 +111,8 @@ func (i *KVStoreHTTPInteractor) GetStats() map[string]*SummaryStats {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 	// make copies of the stats
-	broadcastTxSync := *i.stats["broadcast_tx_sync"]
-	abciQuery := *i.stats["abci_query"]
+	broadcastTxSync := *(i.stats["broadcast_tx_sync"])
+	abciQuery := *(i.stats["abci_query"])
 	return map[string]*SummaryStats{
 		"broadcast_tx_sync": &broadcastTxSync,
 		"abci_query":        &abciQuery,
@@ -176,6 +183,7 @@ func (i *KVStoreHTTPInteractor) getValue() (int64, error) {
 
 	key, value := string(keyDecoded), string(valueDecoded)
 	if key != i.lastKey {
+		//i.logger.Debug("Key mismatch", "key", key, "lastKey", i.lastKey)
 		return timeTaken, NewError(ErrKVStoreClientGetFailed, nil, "key does not match requested key")
 	}
 	if value != i.lastValue {
@@ -201,7 +209,9 @@ func (i *KVStoreHTTPInteractor) generateRandomKVPair() (string, string) {
 		valueBytes = i.generateNonRandomBytes()
 	}
 
-	return hex.EncodeToString(keyBytes), hex.EncodeToString(valueBytes)
+	key, value := hex.EncodeToString(keyBytes), hex.EncodeToString(valueBytes)
+	//i.logger.Debug("Generated random key/value pair", "key", key, "value", value)
+	return key, value
 }
 
 func (i *KVStoreHTTPInteractor) generateNonRandomBytes() []byte {
@@ -214,4 +224,12 @@ func (i *KVStoreHTTPInteractor) generateNonRandomBytes() []byte {
 		i.counter = 0
 	}
 	return s
+}
+
+func (i *KVStoreHTTPInteractor) requestDelay() time.Duration {
+	rng := int64(i.cfg.Clients.RequestWaitMax - i.cfg.Clients.RequestWaitMin)
+	if rng == 0 {
+		return time.Duration(i.cfg.Clients.RequestWaitMin)
+	}
+	return time.Duration(i.cfg.Clients.RequestWaitMin) + time.Duration(rand.Int63n(rng))
 }

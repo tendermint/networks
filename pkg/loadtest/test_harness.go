@@ -99,8 +99,8 @@ func (th *TestHarness) Handle(msg actor.Message) {
 	case SpawnClients:
 		th.spawnClients()
 
-	case ClientStats:
-		th.clientStats(msg)
+	// TODO: Intermediate reporting on client stats
+	// case ClientStats:
 
 	case ClientFinished:
 		th.clientFinished(msg)
@@ -183,7 +183,7 @@ func (th *TestHarness) clientFinished(msg actor.Message) {
 	th.removeClient(id)
 	// if all the clients have finished
 	if th.clientCount() == 0 {
-		th.Send(th, actor.Message{Type: TestHarnessFinished, Data: *th.stats})
+		th.Send(th, actor.Message{Type: TestHarnessFinished, Data: th.stats})
 	}
 }
 
@@ -231,9 +231,4 @@ func (th *TestHarness) waitForAllClients() {
 	case <-time.After(TestHarnessShutdownTimeLimit):
 		th.Logger.Error("Failed to shut down all clients before stopping test harness")
 	}
-}
-
-func (th *TestHarness) clientStats(msg actor.Message) {
-	stats := msg.Data.(ClientStatsMessage).Stats
-	th.stats.Merge(stats)
 }

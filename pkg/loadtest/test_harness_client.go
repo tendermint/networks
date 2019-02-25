@@ -106,13 +106,19 @@ func (c *TestHarnessClient) clientInteractionLoop() {
 	testStopTime := time.Now().Add(time.Duration(c.parent.Cfg.Clients.MaxTestTime)).UnixNano()
 	completed := true
 
+	istats.Count = 0
+
 loop:
-	for istats.Count = 0; istats.Count < maxInt || maxInt < 0; istats.Count++ {
+	for {
+		if maxInt != -1 && istats.Count >= maxInt {
+			break loop
+		}
+
 		startTime := time.Now().UnixNano()
 		c.interactor.Interact()
 		now := time.Now().UnixNano()
-		timeTaken := (now - startTime) / 1000
-		istats.Add(timeTaken)
+		timeTaken := now - startTime
+		istats.AddNano(timeTaken)
 
 		// if we've run for longer than the maximum test time
 		if now >= testStopTime {
@@ -120,11 +126,12 @@ loop:
 		}
 
 		// periodically report back on stats
-		if ((istats.Count + 1) % ClientStatsReportingFrequency) == 0 {
+		if (istats.Count % ClientStatsReportingFrequency) == 0 {
 			stats := &ClientSummaryStats{
 				Interactions: &(*istats),
 				Requests:     c.interactor.GetStats(),
 			}
+			stats.Compute()
 			c.Send(c, actor.Message{Type: ClientStats, Data: ClientStatsMessage{ID: c.GetID(), Stats: stats}})
 		}
 
@@ -141,6 +148,7 @@ loop:
 		Interactions: &(*istats),
 		Requests:     c.interactor.GetStats(),
 	}
+	stats.Compute()
 
 	if completed {
 		c.Send(c, actor.Message{Type: ClientFinished, Data: ClientStatsMessage{ID: c.GetID(), Stats: stats}})

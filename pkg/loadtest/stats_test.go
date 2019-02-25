@@ -27,23 +27,23 @@ func TestSummaryStats(t *testing.T) {
 		{3010, 13360, 3000, 2},
 		{3090, 16450, 3000, 3}, // testing truncation to the lower bin
 	}
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		s.Add(tc.timeTaken, nil)
 
 		if tc.totalTime != s.TotalTime {
-			t.Fatal("Expected total time to be", tc.totalTime, "but was", s.TotalTime)
+			t.Errorf("Test case %d: Expected total time to be %d but was %d", i, tc.totalTime, s.TotalTime)
 		}
 		count, ok := s.TimeBins[tc.bin]
 		if !ok {
-			t.Fatal("Expected bin", tc.bin, "to be present, but it was not")
+			t.Errorf("Test case %d: Expected bin %d to be present, but it was not", i, tc.bin)
 		}
 		if tc.binCount != count {
-			t.Fatal("Expected bin", tc.bin, "to contain value", tc.binCount, ", but was", count)
+			t.Errorf("Test case %d: Expected bin %d to contain value %d, but was %d", i, tc.bin, tc.binCount, count)
 		}
 	}
 }
 
-func TestClientSummaryStatsMerging(t *testing.T) {
+func TestClientSummaryStatsMerge(t *testing.T) {
 	testCases := []struct {
 		summaries []*loadtest.ClientSummaryStats
 		expected  *loadtest.ClientSummaryStats
@@ -169,8 +169,6 @@ func TestClientSummaryStatsMerging(t *testing.T) {
 
 		if !tc.expected.Equals(actual, logger) {
 			t.Errorf("Test case %d: Expected %v but got %v", i, tc.expected, actual)
-		} else {
-			t.Logf("Test case %d: SUCCESS. Matched %v to %v", i, tc.expected, actual)
 		}
 	}
 }

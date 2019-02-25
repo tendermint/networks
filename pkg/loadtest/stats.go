@@ -119,6 +119,7 @@ func (s *SummaryStats) Add(t int64, errs ...error) {
 
 	s.TotalTime += t
 	s.Count++
+
 	if len(errs) > 0 && errs[0] != nil {
 		errStr := errs[0].Error()
 		if _, ok := s.ErrorsByType[errStr]; !ok {
@@ -136,9 +137,9 @@ func (s *SummaryStats) Add(t int64, errs ...error) {
 }
 
 // AddNano calls Add assuming that the given time is in nanoseconds, and thus
-// needs to be divided by 1000 before being added.
+// needs to be divided by 1,000,000 before being added.
 func (s *SummaryStats) AddNano(t int64, errs ...error) {
-	s.Add(t/1000, errs...)
+	s.Add(t/1000000, errs...)
 }
 
 // TimeAndAdd executes the given function, tracking how long it takes to
@@ -151,6 +152,7 @@ func (s *SummaryStats) TimeAndAdd(req func() error) {
 // Merge will add the stats from the given summary into this one. Assumes that
 // `o` has the exact same time bin configuration as `i`.
 func (s *SummaryStats) Merge(o *SummaryStats) {
+	// if we have no transactions yet, use the other summary's min/max stats
 	if s.Count == 0 {
 		s.MinTime = o.MinTime
 		s.MaxTime = o.MaxTime
@@ -185,7 +187,11 @@ func (s *SummaryStats) Merge(o *SummaryStats) {
 // Compute will calculate any remaining stats that weren't calculated on-the-fly
 // during the Add function calls.
 func (s *SummaryStats) Compute() {
-	s.AvgTime = float64(s.TotalTime) / float64(s.Count)
+	if s.Count > 0 {
+		s.AvgTime = float64(s.TotalTime) / float64(s.Count)
+	} else {
+		s.AvgTime = 0
+	}
 }
 
 // PrintTimeBins is useful for debugging purposes.
@@ -304,37 +310,59 @@ func (s *SummaryStats) SummaryCSV() []string {
 }
 
 func (s *SummaryStats) String() string {
-	return fmt.Sprintf(`SummaryStats{
-	Count:        %d
-	Errors:       %d
-	TotalTime:    %d
-	AvgTime:      %.3f
-	MinTime:      %d
-	MaxTime:      %d
-	TimeBins:     %v
-	ErrorsByType: %v
-	Timeout:      %d
-	BinSize:      %d
-	BinCount:     %d
-}
-`,
+	return fmt.Sprintf("SummaryStats{Count: %d, Errors: %d, TotalTime: %d, "+
+		"AvgTime: %.3f, MinTime: %d, MaxTime: %d, TimeBins: %v, ErrorsByType: %v, "+
+		"Timeout: %d, BinSize: %d, BinCount: %d}",
 		s.Count,
 		s.Errors,
 		s.TotalTime,
 		s.AvgTime,
 		s.MinTime,
 		s.MaxTime,
-		s.TimeBins,
-		s.ErrorsByType,
+		s.timeBinsToString(),
+		s.errorsByTypeToString(),
 		s.Timeout,
 		s.BinSize,
 		s.BinCount,
 	)
 }
 
+func (s *SummaryStats) timeBinsToString() string {
+	res := ""
+	for bin := int64(0); bin < s.Timeout; bin += s.BinSize {
+		if bin > 0 {
+			res = res + ", "
+		}
+		res = res + fmt.Sprintf("%d:%d", bin, s.TimeBins[int(bin)])
+	}
+	return res
+}
+
+func (s *SummaryStats) errorsByTypeToString() string {
+	res := ""
+	i := 0
+	for err, count := range s.ErrorsByType {
+		if i > 0 {
+			res = res + ", "
+		}
+		res = res + fmt.Sprintf("\"%s\": %d", err, count)
+		i++
+	}
+	return res
+}
+
 //
 // ClientSummaryStats
 //
+
+// NewClientSummaryStats creates and initialises an empty ClientSummaryStats
+// object with the given interaction timeout.
+func NewClientSummaryStats(itimeout time.Duration) *ClientSummaryStats {
+	return &ClientSummaryStats{
+		Interactions: NewSummaryStats(itimeout),
+		Requests:     make(map[string]*SummaryStats),
+	}
+}
 
 // Merge will combine the given client summary stats with this one.
 func (c *ClientSummaryStats) Merge(o *ClientSummaryStats) {
@@ -345,7 +373,8 @@ func (c *ClientSummaryStats) Merge(o *ClientSummaryStats) {
 			c.Requests[reqID].Merge(stats)
 		} else {
 			// if we haven't, make a copy of the other's stats
-			c.Requests[reqID] = &(*stats)
+			c.Requests[reqID] = NewSummaryStats(time.Duration(o.Requests[reqID].Timeout) * time.Millisecond)
+			*c.Requests[reqID] = *o.Requests[reqID]
 		}
 	}
 }

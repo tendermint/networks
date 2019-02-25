@@ -106,8 +106,6 @@ func (m *remoteMaster) recvMessage(src actor.Message, timeouts ...time.Duration)
 
 func (m *remoteMaster) sendMessage(msg actor.Message) {
 	if err := webSocketsSend(m.conn, msg); err != nil {
-		m.Logger.Error("Failed to send WebSockets message", "err", err)
-	} else {
-		m.Logger.Debug("Sent message", "msg", msg)
+		m.Logger.Error("Failed to send WebSockets message", "err", err, "msg", msg)
 	}
 }

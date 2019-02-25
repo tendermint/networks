@@ -122,6 +122,14 @@ func (m Message) Reply(msg Message) {
 	}
 }
 
+func (m Message) String() string {
+	senderID := "nil"
+	if m.Sender != nil {
+		senderID = m.Sender.GetID()
+	}
+	return fmt.Sprintf("Message{Type: %s, Data: %v, Sender: %s}", m.Type, m.Data, senderID)
+}
+
 // RegisterMessageParser registers (adds or overrides) the parser for the given
 // message type.
 func RegisterMessageParser(mt MessageType, p MessageParser) {
