@@ -27,9 +27,18 @@ build-tm-outage-sim-server-linux: get-deps
 		go build -o $(BUILD_DIR)/tm-outage-sim-server \
 		$(SRC_DIR)/cmd/tm-outage-sim-server/main.go
 
-build: build-tm-outage-sim-server
+build-tm-load-test: get-deps
+	go build -o $(BUILD_DIR)/tm-load-test \
+		$(SRC_DIR)/cmd/tm-load-test/main.go
 
-build-linux: build-tm-outage-sim-server-linux
+build-tm-load-test-linux: get-deps
+	GOOS=linux GOARCH=amd64 \
+		go build -o $(BUILD_DIR)/tm-load-test \
+		$(SRC_DIR)/cmd/tm-load-test/main.go
+
+build: build-tm-outage-sim-server build-tm-load-test
+
+build-linux: build-tm-outage-sim-server-linux build-tm-load-test-linux
 
 lint: get-deps get-linter
 	golangci-lint run ./...
