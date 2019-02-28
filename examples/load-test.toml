@@ -5,12 +5,7 @@ bind = "127.0.0.1:35000"
 # How many slaves to expect to connect before starting the load test
 expect_slaves = 2
 
-# The folder where tm-load-test will dump results. A sub-folder will be created
-# in this folder according to the name of this configuration file: so if this
-# file is called "load-test.toml", a folder called "load-test" will be created
-# in the results directory.
-# NOTE: If a relative path is supplied (starting with a "."), the resulting
-# path will be relative to this configuration file.
+# The folder where tm-load-test will dump results.
 results_dir = "./results"
 
 [slave]
