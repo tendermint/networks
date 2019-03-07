@@ -1,18 +1,27 @@
 version: 2.1
 
-orbs:
-  awscli: circleci/aws-cli@0.1.11
+aliases:
+  - &TERRAGRUNT tendermintdev/terragrunt
+  - &PYTHON python:3.7.2-alpine3.9
+  - &GOLANG circleci/golang:1.11.5
 
 executors:
   golang:
     docker:
-      - image: circleci/golang:1.11.5
+      - image: *GOLANG
     working_directory: /go/src/github.com/cosmos
     environment:
       AWS_DEFAULT_REGION: us-east-1
 
-aliases:
-  - &TERRAGRUNT tendermintdev/terragrunt
+  python:
+    docker:
+      - image: *PYTHON
+
+  terragrunt:
+    docker:
+      - image: *TERRAGRUNT
+    environment:
+      AWS_REGION: us-east-1
 
 network: &network
   run:
@@ -41,52 +50,52 @@ ecs: &ecs
       apply_config
       rm ~/plan.output
 
-
-build_env: &build_env
-  docker:
-    - image: *TERRAGRUNT
-  environment:
-    AWS_REGION: us-east-1
-
 jobs:
   build:
-    <<: *build_env
+    executor: terragrunt
     steps:
       - checkout
       - *network
       - *ecs
 
-  build_gaia_deps:
+  build_gaia_sim_image:
     executor: golang
     steps:
       - checkout
-    #  - setup_remote_docker:
-    #      docker_layer_caching: true
-    #  - run:
-    #      name: Build simulation image
-    #      command: |
-    #        cd gaia_simulation
-    #        docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
-    #        docker build -t tendermintdev/gaia_sim .
-    #        docker push tendermintdev/gaia_sim
-      - awscli/install
-      - awscli/configure:
-          profile-name: testnets
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build simulation image
+          command: |
+            cd gaia_simulation
+            docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
+            docker build -t tendermintdev/gaia_sim .
+            docker push tendermintdev/gaia_sim
+
+  run_simulation:
+    executor: python
+    steps:
+      - checkout
       - run:
           name: Start ECS tasks
           command: |
-            echo "credential_source = Environment" >> ~/.aws/config
-            echo "role_arn = arn:aws:iam::388991194029:role/testnets" >> ~/.aws/config
-
-            aws ecs run-task --profile testnets
-                             --cluster gaiad-simulation \
-                             --task-definition simulation:1 \
-                             --launch-type FARGATE \
-                             --network-configuration "awsvpcConfiguration={subnets=[subnet-03a96c201278faf96]}"
-
+            pip3 install boto3
+            cd testnet-kitchen/src/simulation
+            ./run_simulation.py
 
 workflows:
   version: 2
   ecs_testnet_deployment:
     jobs:
-      - build_gaia_deps
+      - build:
+          filters:
+            branches:
+              only:
+                - master
+
+  gaia_simulation:
+    jobs:
+      - build_gaia_sim_image
+      - run_simulation:
+          requires:
+            - build_gaia_sim_image
