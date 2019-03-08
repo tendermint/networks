@@ -1,6 +1,7 @@
 version: 2.1
 
 aliases:
+  # Docker images
   - &TERRAGRUNT tendermintdev/terragrunt
   - &PYTHON python:3.7.2-alpine3.9
   - &GOLANG circleci/golang:1.11.5
@@ -67,7 +68,7 @@ jobs:
       - run:
           name: Build simulation image
           command: |
-            cd gaia_simulation
+            cd testnet-kitchen/src/simulation/docker/gaia_simulation
             docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
             docker build -t tendermintdev/gaia_sim .
             docker push tendermintdev/gaia_sim
