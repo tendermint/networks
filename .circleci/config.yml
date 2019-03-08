@@ -1,4 +1,4 @@
-version: 2.1
+version: 2
 
 aliases:
   # Docker images
@@ -6,23 +6,22 @@ aliases:
   - &PYTHON python:3.7.2-alpine3.9
   - &GOLANG circleci/golang:1.11.5
 
-executors:
-  golang:
-    docker:
-      - image: *GOLANG
-    working_directory: /go/src/github.com/cosmos
-    environment:
-      AWS_DEFAULT_REGION: us-east-1
+golang: &golang
+  docker:
+    - image: *GOLANG
+  working_directory: /go/src/github.com/cosmos
+  environment:
+    AWS_DEFAULT_REGION: us-east-1
 
-  python:
-    docker:
-      - image: *PYTHON
+python: &python
+  docker:
+    - image: *PYTHON
 
-  terragrunt:
-    docker:
-      - image: *TERRAGRUNT
-    environment:
-      AWS_REGION: us-east-1
+terragrunt: &terragrunt
+  docker:
+    - image: *TERRAGRUNT
+  environment:
+    AWS_REGION: us-east-1
 
 network: &network
   run:
@@ -60,7 +59,7 @@ tools_defaults: &tools_defaults
 
 jobs:
   build:
-    executor: terragrunt
+    <<: *terragrunt
     steps:
       - checkout
       - *network
@@ -119,7 +118,7 @@ jobs:
             make test
 
   build_gaia_sim_image:
-    executor: golang
+    <<: *golang
     steps:
       - checkout
       - setup_remote_docker:
@@ -133,13 +132,16 @@ jobs:
             docker push tendermintdev/gaia_sim
 
   run_simulation:
-    executor: python
+    <<: *python
     steps:
       - checkout
       - run:
+          name: Install pip and boto3
+          command: |
+            pip3 install boto3 requests
+      - run:
           name: Start ECS tasks
           command: |
-            pip3 install boto3
             cd testnet-kitchen/src/simulation
             ./run_simulation.py
 
@@ -155,8 +157,16 @@ workflows:
 
   gaia_simulation:
     jobs:
-      - build_gaia_sim_image
+      - build_gaia_sim_image:
+          filters:
+            branches:
+              only:
+                - simulation
       - run_simulation:
+          filters:
+            branches:
+              only:
+                - simulation
           requires:
             - build_gaia_sim_image
   
