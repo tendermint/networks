@@ -154,13 +154,13 @@ func (a *BaseActor) getShutdownErr() error {
 // function.
 func (a *BaseActor) Shutdown() {
 	if !a.isShutdownStarted() {
+		a.setShutdownStarted(true)
 		if a.impl != nil {
 			if err := a.impl.OnShutdown(); err != nil {
 				a.setShutdownErr(err)
 			}
 		}
 		a.shutdownChan <- true
-		a.setShutdownStarted(true)
 	}
 }
 

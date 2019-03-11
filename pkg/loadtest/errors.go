@@ -27,6 +27,7 @@ const (
 	ErrMissingMessageField
 	ErrMissingSlaveStats
 	ErrRemoteSlavesShutdownFailed
+	ErrMasterKilled
 
 	ErrKVStoreClientPutFailed
 	ErrKVStoreClientGetFailed
@@ -56,7 +57,7 @@ func NewError(code ErrorCode, upstream error, additionalInfo ...string) *Error {
 // Error implements error.
 func (e Error) Error() string {
 	if e.Upstream != nil {
-		return fmt.Sprintf("%s\nCaused by: %s", e.Message, e.Upstream.Error())
+		return fmt.Sprintf("%s. Caused by: %s", e.Message, e.Upstream.Error())
 	}
 	return e.Message
 }
@@ -104,6 +105,8 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Missing statistics from slave node"
 	case ErrRemoteSlavesShutdownFailed:
 		result = "Remote slaves shutdown failed"
+	case ErrMasterKilled:
+		result = "Master node was killed"
 
 	case ErrKVStoreClientPutFailed:
 		result = "KVStore client \"put\" request failed"

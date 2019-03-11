@@ -13,41 +13,41 @@ import (
 // Config is the central configuration structure for our load testing, from both
 // the master and slaves' perspectives.
 type Config struct {
-	Master      MasterConfig      // The master's load testing configuration.
-	Slave       SlaveConfig       // The slaves' load testing configuration.
-	TestNetwork TestNetworkConfig // The test network layout/configuration.
-	Clients     ClientConfig      // Load testing client-related configuration.
+	Master      MasterConfig      `toml:"master"`       // The master's load testing configuration.
+	Slave       SlaveConfig       `toml:"slave"`        // The slaves' load testing configuration.
+	TestNetwork TestNetworkConfig `toml:"test_network"` // The test network layout/configuration.
+	Clients     ClientConfig      `toml:"clients"`      // Load testing client-related configuration.
 }
 
 // MasterConfig provides the configuration for the load testing master.
 type MasterConfig struct {
-	Bind         string // The address to which to bind the master (host:port).
-	ExpectSlaves int    // The number of slaves to expect to connect before starting the load test.
-	ResultsDir   string // The root of the results output directory.
+	Bind         string `toml:"bind"`          // The address to which to bind the master (host:port).
+	ExpectSlaves int    `toml:"expect_slaves"` // The number of slaves to expect to connect before starting the load test.
+	ResultsDir   string `toml:"results_dir"`   // The root of the results output directory.
 }
 
 // SlaveConfig provides configuration specific to the load testing slaves.
 type SlaveConfig struct {
-	Master string // The master's external address (host:port).
+	Master string `toml:"master"` // The master's external address (host:port).
 }
 
 // TestNetworkConfig encapsulates information about the network under test.
 type TestNetworkConfig struct {
-	RPCPort int // The default Tendermint RPC port.
+	RPCPort int `toml:"rpc_port"` // The default Tendermint RPC port.
 
-	EnablePrometheus       bool              // Should we enable collections of Prometheus stats during testing?
-	PrometheusPort         int               // The default Prometheus port.
-	PrometheusPollInterval ParseableDuration // How often should we poll the Prometheus endpoint?
-	PrometheusPollTimeout  ParseableDuration // At what point do we consider a Prometheus polling operation a failure?
+	EnablePrometheus       bool              `toml:"enable_prometheus"`        // Should we enable collections of Prometheus stats during testing?
+	PrometheusPort         int               `toml:"prometheus_port"`          // The default Prometheus port.
+	PrometheusPollInterval ParseableDuration `toml:"prometheus_poll_interval"` // How often should we poll the Prometheus endpoint?
+	PrometheusPollTimeout  ParseableDuration `toml:"prometheus_poll_timeout"`  // At what point do we consider a Prometheus polling operation a failure?
 
-	Targets []TestNetworkTargetConfig // Configuration for each of the Tendermint nodes in the network.
+	Targets []TestNetworkTargetConfig `toml:"targets"` // Configuration for each of the Tendermint nodes in the network.
 }
 
 // TestNetworkTargetConfig encapsulates the configuration for each node in the
 // Tendermint test network.
 type TestNetworkTargetConfig struct {
-	ID   string // A short, descriptive identifier for this node.
-	Host string // The host address for this node.
+	ID   string `toml:"id"`   // A short, descriptive identifier for this node.
+	Host string `toml:"host"` // The host address for this node.
 
 	RPCPort        int    `toml:"rpc_port,omitempty"`        // Override for the default Tendermint RPC port for this node.
 	PrometheusPort int    `toml:"prometheus_port,omitempty"` // Override for the default Prometheus port for this node.
@@ -56,15 +56,15 @@ type TestNetworkTargetConfig struct {
 
 // ClientConfig contains the configuration for clients being spawned on slaves.
 type ClientConfig struct {
-	Type               string            // The type of client to spawn.
-	Spawn              int               // The number of clients to spawn, per slave.
-	SpawnRate          float32           // The rate at which to spawn clients, per second, on each slave.
-	MaxInteractions    int               // The maximum number of interactions emanating from each client.
-	MaxTestTime        ParseableDuration // The maximum duration of the test, beyond which this client must be stopped.
-	RequestWaitMin     ParseableDuration // The minimum wait period before each request before sending another one.
-	RequestWaitMax     ParseableDuration // The maximum wait period before each request before sending another one.
-	RequestTimeout     ParseableDuration // The maximum time allowed before considering a request to have timed out.
-	InteractionTimeout ParseableDuration // The maximum time allowed for an overall interaction.
+	Type               string            `toml:"type"`                // The type of client to spawn.
+	Spawn              int               `toml:"spawn"`               // The number of clients to spawn, per slave.
+	SpawnRate          float64           `toml:"spawn_rate"`          // The rate at which to spawn clients, per second, on each slave.
+	MaxInteractions    int               `toml:"max_interactions"`    // The maximum number of interactions emanating from each client.
+	MaxTestTime        ParseableDuration `toml:"max_test_time"`       // The maximum duration of the test, beyond which this client must be stopped.
+	RequestWaitMin     ParseableDuration `toml:"request_wait_min"`    // The minimum wait period before each request before sending another one.
+	RequestWaitMax     ParseableDuration `toml:"request_wait_max"`    // The maximum wait period before each request before sending another one.
+	RequestTimeout     ParseableDuration `toml:"request_timeout"`     // The maximum time allowed before considering a request to have timed out.
+	InteractionTimeout ParseableDuration `toml:"interaction_timeout"` // The maximum time allowed for an overall interaction.
 }
 
 // ParseableDuration represents a time.Duration that implements
@@ -198,7 +198,7 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 //
 
 func (c *ClientConfig) Validate() error {
-	if clientFactory := GetTestHarnessClientFactory(c.Type); clientFactory != nil {
+	if clientFactory := GetTestHarnessClientFactory(c.Type); clientFactory == nil {
 		return NewError(
 			ErrInvalidConfig,
 			nil,

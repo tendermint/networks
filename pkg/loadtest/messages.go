@@ -20,7 +20,9 @@ const (
 	AllSlavesReady     actor.MessageType = "all-slaves-ready"
 	StartLoadTest      actor.MessageType = "start-load-test"
 	SlaveFinished      actor.MessageType = "slave-finished"
+	SlaveShutDown      actor.MessageType = "slave-shut-down"
 	ConnectionClosed   actor.MessageType = "connection-closed"
+	MasterKilled       actor.MessageType = "master-killed"
 
 	SpawnClients         actor.MessageType = "spawn-clients"
 	ClientFailed         actor.MessageType = "client-failed"
@@ -32,6 +34,11 @@ const (
 
 type SlaveIDMessage struct {
 	ID string `json:"id"`
+}
+
+type SlaveFailedMessage struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type SlaveFinishedMessage struct {
@@ -58,14 +65,23 @@ func init() {
 	actor.RegisterMessageParser(TooManySlaves, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(AlreadySeenSlave, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(SlaveAccepted, actor.ParseMessageWithNoData)
-	actor.RegisterMessageParser(SlaveFailed, ParseSlaveIDMessage)
+	actor.RegisterMessageParser(SlaveFailed, ParseSlaveFailedMessage)
 	actor.RegisterMessageParser(AllSlavesReady, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(StartLoadTest, actor.ParseMessageWithNoData)
 	actor.RegisterMessageParser(SlaveFinished, ParseSlaveFinishedMessage)
+	actor.RegisterMessageParser(MasterKilled, actor.ParseMessageWithNoData)
 }
 
 func ParseSlaveIDMessage(data json.RawMessage) (interface{}, error) {
 	msg := SlaveIDMessage{}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+func ParseSlaveFailedMessage(data json.RawMessage) (interface{}, error) {
+	msg := SlaveFailedMessage{}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return nil, err
 	}

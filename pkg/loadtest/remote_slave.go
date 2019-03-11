@@ -48,6 +48,7 @@ func (s *remoteSlave) OnShutdown() error {
 		s.Logger.Error("Failed to send WebSockets close message", "err", err)
 		return err
 	}
+	s.master.Recv(actor.Message{Type: SlaveShutDown, Data: SlaveIDMessage{ID: s.GetID()}})
 	return nil
 }
 
@@ -58,25 +59,25 @@ func (s *remoteSlave) Handle(msg actor.Message) {
 		s.Send(s.master, msg)
 
 	case RecvMessage:
-		res := s.recvMessage(msg)
+		if res := s.recvMessage(msg); res != nil {
+			// peek into the incoming message
+			switch res.Type {
+			case SlaveReady:
+				s.SetID(res.Data.(SlaveIDMessage).ID)
+				s.Logger.Info("Slave ready")
 
-		// peek into the incoming message
-		switch res.Type {
-		case SlaveReady:
-			s.SetID(res.Data.(SlaveIDMessage).ID)
-			s.Logger.Info("Slave ready")
+			case SlaveFinished:
+				s.Logger.Info("Slave finished")
+				s.setState(SlaveCompleting)
+				s.Shutdown()
+				return
 
-		case SlaveFinished:
-			s.Logger.Info("Slave finished")
-			s.setState(SlaveCompleting)
-			s.Shutdown()
-			return
-
-		case SlaveFailed:
-			s.Logger.Error("Slave failed")
-			s.setState(SlaveFailing)
-			s.Shutdown()
-			return
+			case SlaveFailed:
+				s.Logger.Error("Slave failed")
+				s.setState(SlaveFailing)
+				s.Shutdown()
+				return
+			}
 		}
 
 	default:

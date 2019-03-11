@@ -127,9 +127,20 @@ func (n *MasterNode) Handle(msg actor.Message) {
 	case SlaveFailed:
 		n.slaveFailed(msg)
 
+	case SlaveShutDown:
+		n.slaveShutDown(msg)
+
 	case ConnectionClosed:
 		n.connectionClosed(msg)
 	}
+}
+
+// Kill is called when the master node is interrupted (e.g. Ctrl+C).
+func (n *MasterNode) Kill() {
+	n.Logger.Info("Kill signal received")
+	// terminate all the slaves
+	n.broadcast(actor.Message{Type: MasterKilled})
+	n.Shutdown()
 }
 
 func (n *MasterNode) wsClientFactory(conn *websocket.Conn) (actor.Actor, error) {
@@ -159,8 +170,9 @@ func (n *MasterNode) slaveReady(msg actor.Message) {
 }
 
 func (n *MasterNode) slaveFailed(msg actor.Message) {
-	id := msg.Data.(SlaveIDMessage).ID
-	n.removeRemoteSlave(id)
+	data := msg.Data.(SlaveFailedMessage)
+	n.removeRemoteSlave(data.ID)
+	n.Logger.Error("Slave failed", "id", data.ID, "reason", data.Reason)
 	// if we have fewer slaves than we need
 	if n.remoteSlaveCount() < n.cfg.Master.ExpectSlaves {
 		n.failAllSlaves()
@@ -180,17 +192,16 @@ func (n *MasterNode) failAllSlaves() {
 func (n *MasterNode) waitForSlaves() {
 	n.Logger.Debug("Waiting for slaves to shut down")
 	startTime := time.Now()
-loop:
 	for {
 		if n.remoteSlaveCount() == 0 {
 			n.Logger.Info("All slaves successfully shut down")
-			break loop
+			return
 		}
 		time.Sleep(100 * time.Millisecond)
 		if time.Since(startTime) > RemoteSlaveWaitTimeout {
 			n.Logger.Error("Timed out waiting for remote slaves to shut down")
 			n.FailAndShutdown(NewError(ErrRemoteSlavesShutdownFailed, nil, "timed out"))
-			break loop
+			return
 		}
 	}
 }
@@ -226,6 +237,7 @@ func (n *MasterNode) removeRemoteSlave(id string) {
 }
 
 func (n *MasterNode) readinessCheckLoop() {
+	defer n.Logger.Debug("Readiness check loop stopped")
 	for {
 		select {
 		case <-n.readyTicker.C:
@@ -268,6 +280,7 @@ func (n *MasterNode) startLoadTesting() {
 }
 
 func (n *MasterNode) recvCheckLoop() {
+	defer n.Logger.Debug("Recv check loop stopped")
 	for {
 		select {
 		case <-n.recvTicker.C:
@@ -291,9 +304,15 @@ func (n *MasterNode) slaveFinished(msg actor.Message) {
 	}
 
 	n.stats.Merge(stats)
-	n.removeRemoteSlave(id)
 	n.Logger.Info("Slave completed load testing", "id", id)
+}
 
+func (n *MasterNode) slaveShutDown(msg actor.Message) {
+	data := msg.Data.(SlaveIDMessage)
+	id := data.ID
+
+	n.Logger.Info("Remote slave shut down", "id", id)
+	n.removeRemoteSlave(id)
 	n.finishedCount++
 	if n.finishedCount >= n.cfg.Master.ExpectSlaves {
 		n.allSlavesFinished()

@@ -39,6 +39,14 @@ func (m *remoteMaster) OnStart() error {
 	return nil
 }
 
+func (m *remoteMaster) OnShutdown() error {
+	m.Logger.Debug("Shutting down connection to remote master")
+	if err := webSocketsClose(m.conn); err != nil {
+		m.Logger.Error("Failed to cleanly close WebSockets connection", "err", err)
+	}
+	return nil
+}
+
 func (m *remoteMaster) connCloseHandler(code int, text string) error {
 	m.Logger.Info("Remote side closed the connection")
 	m.Send(m, actor.Message{Type: ConnectionClosed})
@@ -59,15 +67,12 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 		if ok {
 			timeout = cfg.Timeout
 		}
-		res := m.recvMessage(msg, timeout)
-
-		if res != nil {
+		if res := m.recvMessage(msg, timeout); res != nil {
 			// peek into the response from the master
 			switch res.Type {
-			case TooManySlaves, AlreadySeenSlave, SlaveFailed:
+			case TooManySlaves, AlreadySeenSlave, SlaveFailed, MasterKilled:
 				m.Logger.Error("Master notified us of failure", "type", res.Type)
 				m.Shutdown()
-				return
 			}
 		}
 
@@ -77,17 +82,8 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 
 		// peek into the message being sent
 		switch msg.Type {
-		case SlaveFinished:
-			if err := webSocketsClose(m.conn); err != nil {
-				m.Logger.Error("Failed to cleanly close WebSockets connection", "err", err)
-			}
+		case SlaveFinished, SlaveFailed:
 			m.Shutdown()
-			return
-
-		case SlaveFailed:
-			m.Logger.Error("Slave failed")
-			m.Shutdown()
-			return
 		}
 	}
 }
@@ -95,7 +91,7 @@ func (m *remoteMaster) Handle(msg actor.Message) {
 func (m *remoteMaster) recvMessage(src actor.Message, timeouts ...time.Duration) *actor.Message {
 	res, err := webSocketsRecv(m.conn, timeouts...)
 	if err != nil {
-		m.Logger.Error("Failed to recv incoming WebSockets message", "err", err)
+		m.Logger.Info("Waiting to recv incoming WebSockets message", "err", err)
 		res = nil
 	} else {
 		res.Sender = m

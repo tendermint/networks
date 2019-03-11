@@ -1,5 +1,11 @@
 package loadtest
 
+import (
+	"os"
+	"os/signal"
+	"syscall"
+)
+
 // RunMaster will build and execute a master node for load testing and will
 // block until the testing is complete or fails.
 func RunMaster(configFile string) error {
@@ -17,6 +23,12 @@ func RunMasterWithConfig(cfg *Config) error {
 	if err := master.Start(); err != nil {
 		return err
 	}
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	go func() {
+		<-sigc
+		master.Kill()
+	}()
 	return master.Wait()
 }
 
@@ -37,5 +49,11 @@ func RunSlaveWithConfig(cfg *Config) error {
 	if err := slave.Start(); err != nil {
 		return err
 	}
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	go func() {
+		<-sigc
+		slave.Kill()
+	}()
 	return slave.Wait()
 }

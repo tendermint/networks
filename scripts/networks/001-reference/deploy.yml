@@ -4,16 +4,17 @@
   vars:
     always_deploy_svc: no
     local_tmbin: "{{ lookup('env', 'GOPATH') }}/src/github.com/tendermint/tendermint/build/tendermint"
+    tm_outage_sim_server_bin: "{{ lookup('env', 'GOPATH') }}/src/github.com/tendermint/networks/build/tm-outage-sim-server"
     fast_mode: no
   tasks:
     - name: Check if outage simulator server service is present
-      stat: path=/etc/systemd/system/outage-sim-server.service
+      stat: path=/etc/systemd/system/tm-outage-sim-server.service
       register: outage_sim_server
     - name: Install outage simulator service if not present
       include_tasks: ../../common/ansible/install-outage-sim-svc.yml
       when: not fast_mode and (always_deploy_svc or not outage_sim_server.stat.exists)
     - name: Ensure outage simulator is up and ready
-      service: name=outage-sim-server state=restarted
+      service: name=tm-outage-sim-server state=restarted
 
     # Check if we need to configure the systemd service
     - name: Check if Tendermint service is present

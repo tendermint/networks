@@ -113,9 +113,20 @@ func (n *SlaveNode) Handle(msg actor.Message) {
 	case SlaveFailed:
 		n.errorAndShutdown(ErrSlaveFailed)
 
+	case MasterKilled:
+		n.errorAndShutdown(ErrMasterKilled)
+
 	case ConnectionClosed:
 		n.errorAndShutdown(ErrWebSocketsConnClosed)
 	}
+}
+
+// Kill is called when the process is interrupted (e.g. Ctrl+C).
+func (n *SlaveNode) Kill() {
+	n.Logger.Info("Kill signal received")
+	// inform the master
+	n.Send(n.master, actor.Message{Type: SlaveFailed, Data: SlaveFailedMessage{ID: n.GetID(), Reason: "Slave killed"}})
+	n.Shutdown()
 }
 
 func (n *SlaveNode) slaveReady() {
@@ -147,11 +158,9 @@ func (n *SlaveNode) slaveAccepted(src actor.Message) {
 }
 
 func (n *SlaveNode) startCheckLoop() {
+	defer n.Logger.Debug("Start check loop ended")
 	for {
 		select {
-		case <-n.startCheckChan:
-			return
-
 		case <-n.startCheckTicker.C:
 			n.Send(
 				n.master,
@@ -160,6 +169,9 @@ func (n *SlaveNode) startCheckLoop() {
 					Data: RecvMessageConfig{Timeout: SlaveStartCheckRecvTimeout},
 				},
 			)
+
+		case <-n.startCheckChan:
+			return
 		}
 	}
 }
@@ -167,6 +179,7 @@ func (n *SlaveNode) startCheckLoop() {
 func (n *SlaveNode) startLoadTesting() {
 	if n.startCheckTicker != nil {
 		n.startCheckTicker.Stop()
+		n.startCheckChan <- true
 	}
 	n.Logger.Info("Starting load testing")
 
