@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/tendermint/networks/pkg/loadtest/messages"
 )
 
 // RunMaster will build and execute a master node for load testing and will
@@ -19,17 +21,19 @@ func RunMaster(configFile string) error {
 // RunMasterWithConfig runs a master node with the given configuration and
 // blocks until the testing is complete or it fails.
 func RunMasterWithConfig(cfg *Config) error {
-	master := NewMasterNode(cfg)
-	if err := master.Start(); err != nil {
+	probe := NewStandardProbe()
+	mpid, ctx, err := NewMaster(cfg, probe)
+	if err != nil {
 		return err
 	}
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-sigc
-		master.Kill()
+		ctx.Send(mpid, &messages.Kill{})
 	}()
-	return master.Wait()
+	// wait for the master node to terminate
+	return probe.Wait()
 }
 
 // RunSlave will build and execute a slave node for load testing and will block
@@ -45,15 +49,16 @@ func RunSlave(configFile string) error {
 // RunSlaveWithConfig runs a slave node with the given configuration and blocks
 // until the testing is complete or it fails.
 func RunSlaveWithConfig(cfg *Config) error {
-	slave := NewSlaveNode(cfg, *GetTestHarnessClientFactory(cfg.Clients.Type))
-	if err := slave.Start(); err != nil {
+	probe := NewStandardProbe()
+	spid, ctx, err := NewSlave(cfg, probe)
+	if err != nil {
 		return err
 	}
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	go func() {
 		<-sigc
-		slave.Kill()
+		ctx.Send(spid, &messages.Kill{})
 	}()
-	return slave.Wait()
+	return probe.Wait()
 }

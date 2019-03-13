@@ -5,7 +5,8 @@ BUILD_DIR?=$(SRC_DIR)/build
 .PHONY: build-tm-outage-sim-server build-tm-outage-sim-server-linux \
 	build build-linux \
 	clean test lint \
-	get-deps
+	get-deps \
+	protos
 
 $(GOBIN)/dep:
 	go get -u github.com/golang/dep/cmd/dep
@@ -39,6 +40,11 @@ build-tm-load-test-linux: get-deps
 build: build-tm-outage-sim-server build-tm-load-test
 
 build-linux: build-tm-outage-sim-server-linux build-tm-load-test-linux
+
+protos:
+	protoc --gogoslick_out=$(SRC_DIR)/pkg/loadtest/messages/ \
+		--proto_path=$(GOPATH)/src/github.com/tendermint/networks/pkg/loadtest/messages::$(GOPATH)/src/github.com/tendermint/networks/vendor/ \
+		loadtest.proto
 
 lint: get-deps get-linter
 	golangci-lint run ./...

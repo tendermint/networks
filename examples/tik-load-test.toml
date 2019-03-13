@@ -10,7 +10,7 @@ expect_slaves = 2
 expect_slaves_within = "1m"
 
 # The folder where tm-load-test will dump results.
-results_dir = "./results"
+results_dir = "/tmp/tik-results"
 
 [slave]
 # The IP address/port to which to bind the slave node. Leave out the port to
@@ -22,7 +22,7 @@ bind = "0.0.0.0:"
 # we still need an external address through which to access the master).
 master = "127.0.0.1:35000"
 
-[test-network]
+[test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = true
 
@@ -36,10 +36,10 @@ prometheus_poll_interval = "10s"
 # At what point do we consider a Prometheus polling operation a failure?
 prometheus_poll_timeout = "1s"
 
-    [[test-network.targets]]
+    [[test_network.targets]]
     # A short, descriptive identifier for this host
-    id = "tm1"
-    host = "192.168.2.1"
+    id = "tik0"
+    host = "tik0.sredev.co"
 
     # To override the default RPC/Prometheus ports
     #rpc_port = 26657
@@ -50,13 +50,17 @@ prometheus_poll_timeout = "1s"
     # minutes.
     #outages = "5m:down,8m:up"
 
-    [[test-network.targets]]
-    id = "tm2"
-    host = "192.168.2.2"
+    [[test_network.targets]]
+    id = "tik1"
+    host = "tik1.sredev.co"
 
-    [[test-network.targets]]
-    id = "tm3"
-    host = "192.168.2.3"
+    [[test_network.targets]]
+    id = "tik2"
+    host = "tik2.sredev.co"
+
+    [[test_network.targets]]
+    id = "tik3"
+    host = "tik3.sredev.co"
 
 [clients]
 # What type of client to spawn. The `tmrpc` type uses the Tendermint client for
@@ -64,13 +68,13 @@ prometheus_poll_timeout = "1s"
 type = "tmrpc"
 
 # The number of clients to spawn per slave.
-spawn = 500
+spawn = 10
 
 # The rate at which new clients should be spawned on each slave, per second.
 # A value of 10 would mean that every second, 10 new clients will be spawned on
 # each slave. A value of 0.1 would mean that only 1 client will be spawned
 # every 10 seconds.
-spawn_rate = 10
+spawn_rate = 10.0
 
 # The maximum number of interactions to send, per client. Since tm-load-test
 # assumes the kvstore ABCI application is running, an interaction is defined
@@ -78,7 +82,7 @@ spawn_rate = 10
 # by a GET operation for that same key, ensuring the stored value matches the
 # returned value. Set to -1 to make this "infinite", but then the
 # `max_test_time` parameter MUST be set.
-max_interactions = 10000
+max_interactions = 100
 
 # The maximum amount of time to allow for load testing. If this is exceeded,
 # the test will be brought to and end.

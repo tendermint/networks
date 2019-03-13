@@ -1,457 +1,168 @@
 package loadtest
 
 import (
-	"encoding/csv"
 	"fmt"
-	"io"
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/tendermint/networks/internal/logging"
+
+	"github.com/tendermint/networks/pkg/loadtest/messages"
 )
 
-// DefaultStatsHistogramBins specifies the number of bins that make up a
-// histogram. Setting to 100 gives us percentiles.
-const DefaultStatsHistogramBins = 100
+// DefaultHistogramBinCount indicates the maximum number of bins in a histogram.
+// A value of 100 will give us percentiles.
+const DefaultHistogramBinCount int64 = 100
 
-// RequestStats gives us per-request statistics.
-type RequestStats struct {
-	TimeTaken int64 // The amount of time taken to complete this request (milliseconds).
-	Err       error // For if any error occurred during a particular request.
+type flattenedError struct {
+	errorType string
+	count     int64
 }
 
-// SummaryStats represents a collection of statistics relevant to multiple
-// interactions or requests.
-type SummaryStats struct {
-	Count        int64          `json:"count"`        // Total number of interactions/requests.
-	Errors       int64          `json:"errors"`       // How many errors occurred.
-	TotalTime    int64          `json:"totalTime"`    // Interaction time summed across all interactions/requests (milliseconds).
-	AvgTime      float64        `json:"avgTime"`      // Average interaction/request time (milliseconds).
-	MinTime      int64          `json:"minTime"`      // Minimum interaction/request time (milliseconds).
-	MaxTime      int64          `json:"maxTime"`      // Maximum interaction/request time (milliseconds).
-	TimeBins     map[int]int    `json:"timeBins"`     // Counts of interaction/request times (histogram).
-	ErrorsByType map[string]int `json:"errorsByType"` // Counts of different errors by type of error.
-
-	Timeout  int64 `json:"timeout"`  // The maximum possible range of the histogram.
-	BinSize  int64 `json:"binSize"`  // The size of a histogram bin (milliseconds).
-	BinCount int   `json:"binCount"` // The number of bins in TimeBins.
-}
-
-// ClientSummaryStats gives us statistics for a particular client.
-type ClientSummaryStats struct {
-	Interactions *SummaryStats            `json:"interactions"` // Stats over all of the interactions.
-	Requests     map[string]*SummaryStats `json:"requests"`     // A mapping of each request ID to a summary of its stats.
-}
-
-//
-// RequestStats
-//
-
-// TimeRequest is a utility function that assists with executing the given
-// request function and timing how long it takes to return. This function will
-// return a `RequestStats` object containing the details of the request's
-// execution.
-func TimeRequest(req func() error) *RequestStats {
-	startTime := time.Now().UnixNano()
-	err := req()
-	return &RequestStats{
-		TimeTaken: int64(math.Round((float64(time.Now().UnixNano()) - float64(startTime)) / 1000.0)),
-		Err:       err,
+// NewSummaryStats instantiates an empty, configured SummaryStats object.
+func NewSummaryStats(timeout time.Duration) *messages.SummaryStats {
+	return &messages.SummaryStats{
+		ErrorsByType:  make(map[string]int64),
+		ResponseTimes: NewResponseTimeHistogram(timeout),
 	}
 }
 
-//
-// SummaryStats
-//
-
-// NewSummaryStats creates a summary stats tracker with the given maximum
-// timeout for an interaction/request.
-func NewSummaryStats(timeout time.Duration) *SummaryStats {
-	timeoutMs := int64(math.Round(float64(timeout / time.Millisecond)))
-	if timeoutMs == 0 {
-		panic("timeout cannot be 0ms")
-	}
-	binCount := DefaultStatsHistogramBins
-	bins := make(map[int]int)
-	binSize := timeoutMs / int64(binCount)
-	if binSize == 0 {
-		panic(fmt.Sprintf("timeout must be at least %dms", binCount))
-	}
-	for i := 0; i < binCount+1; i++ {
-		bins[i*int(binSize)] = 0
-	}
-	return &SummaryStats{
-		Count:        0,
-		Errors:       0,
-		TotalTime:    0,
-		AvgTime:      0,
-		MinTime:      0,
-		MaxTime:      0,
-		TimeBins:     bins,
-		ErrorsByType: make(map[string]int),
-		Timeout:      timeoutMs,
-		BinSize:      binSize,
-		BinCount:     binCount + 1,
-	}
-}
-
-// Add will add a new interaction time (milliseconds) and perform the relevant
-// calculations.
-func (s *SummaryStats) Add(t int64, errs ...error) {
-	// cap the value at the timeout
-	if t > s.Timeout {
-		t = s.Timeout
+// AddStatistic adds a single statistic to the given SummaryStats object.
+func AddStatistic(stats *messages.SummaryStats, timeTaken time.Duration, err error) {
+	timeTakenNs := int64(timeTaken) / int64(time.Nanosecond)
+	// we cap the time taken at the response timeout
+	if timeTakenNs > stats.ResponseTimes.Timeout {
+		timeTakenNs = stats.ResponseTimes.Timeout
 	}
 
-	if s.Count == 0 {
-		s.MinTime = t
-		s.MaxTime = t
+	if stats.Count == 0 {
+		stats.MinTime = timeTakenNs
+		stats.MaxTime = timeTakenNs
 	} else {
-		if t < s.MinTime {
-			s.MinTime = t
+		if timeTakenNs < stats.MinTime {
+			stats.MinTime = timeTakenNs
 		}
-		if t > s.MaxTime {
-			s.MaxTime = t
+		if timeTakenNs > stats.MaxTime {
+			stats.MaxTime = timeTakenNs
 		}
 	}
 
-	s.TotalTime += t
-	s.Count++
+	stats.Count++
+	stats.TotalTime += timeTakenNs
 
-	if len(errs) > 0 && errs[0] != nil {
-		errStr := errs[0].Error()
-		if _, ok := s.ErrorsByType[errStr]; !ok {
-			s.ErrorsByType[errStr] = 1
+	if err != nil {
+		stats.Errors++
+		errType := fmt.Sprintf("%s", err)
+		if _, ok := stats.ErrorsByType[errType]; !ok {
+			stats.ErrorsByType[errType] = 1
 		} else {
-			s.ErrorsByType[errStr]++
-		}
-		s.Errors++
-	}
-
-	bin := (t / s.BinSize) * s.BinSize
-	if bin <= s.Timeout {
-		s.TimeBins[int(bin)]++
-	}
-}
-
-// AddNano calls Add assuming that the given time is in nanoseconds, and thus
-// needs to be divided by 1,000,000 before being added.
-func (s *SummaryStats) AddNano(t int64, errs ...error) {
-	s.Add(t/1000000, errs...)
-}
-
-// TimeAndAdd executes the given function, tracking how long it takes to
-// execute and whether it returns an error, and adds
-func (s *SummaryStats) TimeAndAdd(req func() error) {
-	rs := TimeRequest(req)
-	s.Add(rs.TimeTaken, rs.Err)
-}
-
-// Merge will add the stats from the given summary into this one. Assumes that
-// `o` has the exact same time bin configuration as `i`.
-func (s *SummaryStats) Merge(o *SummaryStats) {
-	// if we have no transactions yet, use the other summary's min/max stats
-	if s.Count == 0 {
-		s.MinTime = o.MinTime
-		s.MaxTime = o.MaxTime
-	} else {
-		if o.MinTime < s.MinTime {
-			s.MinTime = o.MinTime
-		}
-		if o.MaxTime > s.MaxTime {
-			s.MaxTime = o.MaxTime
+			stats.ErrorsByType[errType]++
 		}
 	}
 
-	s.TotalTime += o.TotalTime
-	s.Count += o.Count
-	s.Errors += o.Errors
+	bin := int64(0)
+	if timeTakenNs > 0 {
+		bin = stats.ResponseTimes.BinSize * (timeTakenNs / stats.ResponseTimes.BinSize)
+	}
+	stats.ResponseTimes.TimeBins[bin]++
+}
 
-	// combine the counts from the bins
-	for bin := int64(0); bin <= s.Timeout; bin += s.BinSize {
-		s.TimeBins[int(bin)] += o.TimeBins[int(bin)]
+// MergeSummaryStats will merge the given source stats into the destination
+// stats, modifying the destination stats object.
+func MergeSummaryStats(dest, src *messages.SummaryStats) {
+	if src.Count == 0 {
+		return
 	}
 
-	// combine the counts from the error bins
-	for errType, count := range o.ErrorsByType {
-		if _, ok := s.ErrorsByType[errType]; !ok {
-			s.ErrorsByType[errType] = count
+	dest.Count += src.Count
+	dest.Errors += src.Errors
+	dest.TotalTime += src.TotalTime
+
+	if src.MinTime < dest.MinTime {
+		dest.MinTime = src.MinTime
+	}
+	if src.MaxTime > dest.MaxTime {
+		dest.MaxTime = src.MaxTime
+	}
+
+	// merge ErrorsByType
+	for errType, srcCount := range src.ErrorsByType {
+		_, ok := dest.ErrorsByType[errType]
+		if ok {
+			dest.ErrorsByType[errType] += srcCount
 		} else {
-			s.ErrorsByType[errType] += count
-		}
-	}
-}
-
-// Compute will calculate any remaining stats that weren't calculated on-the-fly
-// during the Add function calls.
-func (s *SummaryStats) Compute() {
-	if s.Count > 0 {
-		s.AvgTime = float64(s.TotalTime) / float64(s.Count)
-	} else {
-		s.AvgTime = 0
-	}
-}
-
-// PrintTimeBins is useful for debugging purposes.
-func (s *SummaryStats) PrintTimeBins() {
-	i := 0
-	for bin := int64(0); bin <= s.Timeout; bin += s.BinSize {
-		fmt.Printf("%d:\t%d\t", bin, s.TimeBins[int(bin)])
-		i++
-		if (i % 10) == 0 {
-			fmt.Printf("\n")
-		}
-	}
-}
-
-// Equals will compare this summary stats object to the given one and, if a
-// logger is specified it will be used to output debug information about which
-// fields are different between the two objects.
-func (s *SummaryStats) Equals(o *SummaryStats, loggers ...logging.Logger) bool {
-	equal := true
-	logger := logging.NewNoopLogger()
-	if len(loggers) > 0 {
-		logger = loggers[0]
-	}
-
-	if s.Count != o.Count {
-		logger.Debug("Field mismatch", "s.Count", s.Count, "o.Count", o.Count)
-		equal = false
-	}
-	if s.Errors != o.Errors {
-		logger.Debug("Field mismatch", "s.Errors", s.Errors, "o.Errors", o.Errors)
-		equal = false
-	}
-	if s.TotalTime != o.TotalTime {
-		logger.Debug("Field mismatch", "s.TotalTime", s.TotalTime, "o.TotalTime", o.TotalTime)
-		equal = false
-	}
-	if s.AvgTime != o.AvgTime {
-		logger.Debug("Field mismatch", "s.AvgTime", s.AvgTime, "o.AvgTime", o.AvgTime)
-		equal = false
-	}
-	if s.MinTime != o.MinTime {
-		logger.Debug("Field mismatch", "s.MinTime", s.MinTime, "o.MinTime", o.MinTime)
-		equal = false
-	}
-	if s.MaxTime != o.MaxTime {
-		logger.Debug("Field mismatch", "s.MaxTime", s.MaxTime, "o.MaxTime", o.MaxTime)
-		equal = false
-	}
-	if s.Timeout != o.Timeout {
-		logger.Debug("Field mismatch", "s.Timeout", s.Timeout, "o.Timeout", o.Timeout)
-		equal = false
-	}
-	if s.BinSize != o.BinSize {
-		logger.Debug("Field mismatch", "s.BinSize", s.BinSize, "o.BinSize", o.BinSize)
-		equal = false
-	}
-	if s.BinCount != o.BinCount {
-		logger.Debug("Field mismatch", "s.BinCount", s.BinCount, "o.BinCount", o.BinCount)
-		equal = false
-	}
-
-	if !s.timeBinsEqual(o.TimeBins) {
-		logger.Debug("Field mismatch", "s.TimeBins", s.TimeBins, "o.TimeBins", o.TimeBins)
-		equal = false
-	}
-	if !s.errorsByTypeEqual(o.ErrorsByType) {
-		logger.Debug("Field mismatch", "s.ErrorsByType", s.ErrorsByType, "o.ErrorsByType", o.ErrorsByType)
-		equal = false
-	}
-
-	return equal
-}
-
-func (s *SummaryStats) timeBinsEqual(o map[int]int) bool {
-	if len(s.TimeBins) != len(o) {
-		return false
-	}
-	for bin, count := range s.TimeBins {
-		ocount, ok := o[bin]
-		if !ok {
-			return false
-		}
-		if ocount != count {
-			return false
-		}
-	}
-	return true
-}
-
-func (s *SummaryStats) errorsByTypeEqual(o map[string]int) bool {
-	if len(s.ErrorsByType) != len(o) {
-		return false
-	}
-	for err, count := range s.ErrorsByType {
-		ocount, ok := o[err]
-		if !ok {
-			return false
-		}
-		if ocount != count {
-			return false
-		}
-	}
-	return true
-}
-
-// SummaryCSV compiles the summary statistics into a line that can be written to
-// a CSV file.
-func (s *SummaryStats) SummaryCSV() []string {
-	return []string{
-		fmt.Sprintf("%d", s.Errors),
-		fmt.Sprintf("%.3f", s.AvgTime),
-		fmt.Sprintf("%d", s.MinTime),
-		fmt.Sprintf("%d", s.MaxTime),
-		fmt.Sprintf("%d", s.Count),
-	}
-}
-
-func (s *SummaryStats) String() string {
-	return fmt.Sprintf("SummaryStats{Count: %d, Errors: %d, TotalTime: %d, "+
-		"AvgTime: %.3f, MinTime: %d, MaxTime: %d, TimeBins: %v, ErrorsByType: %v, "+
-		"Timeout: %d, BinSize: %d, BinCount: %d}",
-		s.Count,
-		s.Errors,
-		s.TotalTime,
-		s.AvgTime,
-		s.MinTime,
-		s.MaxTime,
-		s.timeBinsToString(),
-		s.errorsByTypeToString(),
-		s.Timeout,
-		s.BinSize,
-		s.BinCount,
-	)
-}
-
-func (s *SummaryStats) timeBinsToString() string {
-	res := ""
-	for bin := int64(0); bin < s.Timeout; bin += s.BinSize {
-		if bin > 0 {
-			res = res + ", "
-		}
-		res = res + fmt.Sprintf("%d:%d", bin, s.TimeBins[int(bin)])
-	}
-	return res
-}
-
-func (s *SummaryStats) errorsByTypeToString() string {
-	res := ""
-	i := 0
-	for err, count := range s.ErrorsByType {
-		if i > 0 {
-			res = res + ", "
-		}
-		res = res + fmt.Sprintf("\"%s\": %d", err, count)
-		i++
-	}
-	return res
-}
-
-//
-// ClientSummaryStats
-//
-
-// NewClientSummaryStats creates and initialises an empty ClientSummaryStats
-// object with the given interaction timeout.
-func NewClientSummaryStats(itimeout time.Duration) *ClientSummaryStats {
-	return &ClientSummaryStats{
-		Interactions: NewSummaryStats(itimeout),
-		Requests:     make(map[string]*SummaryStats),
-	}
-}
-
-// Merge will combine the given client summary stats with this one.
-func (c *ClientSummaryStats) Merge(o *ClientSummaryStats) {
-	c.Interactions.Merge(o.Interactions)
-	for reqID, stats := range o.Requests {
-		if _, ok := c.Requests[reqID]; ok {
-			// if we've already seen this request before, combine them
-			c.Requests[reqID].Merge(stats)
-		} else {
-			// if we haven't, make a copy of the other's stats
-			c.Requests[reqID] = NewSummaryStats(time.Duration(o.Requests[reqID].Timeout) * time.Millisecond)
-			*c.Requests[reqID] = *o.Requests[reqID]
-		}
-	}
-}
-
-// Compute does a recursive Compute call on internal objects.
-func (c *ClientSummaryStats) Compute() {
-	c.Interactions.Compute()
-	for _, rs := range c.Requests {
-		rs.Compute()
-	}
-}
-
-// Equals does a deep comparison of this object to `o`, optionally using a
-// logger to output more detailed (debug-level) information on what the
-// differences are between the two structures.
-func (c *ClientSummaryStats) Equals(o *ClientSummaryStats, loggers ...logging.Logger) bool {
-	logger := logging.NewNoopLogger()
-	if len(loggers) > 0 {
-		logger = loggers[0]
-	}
-	logger.PushFields()
-
-	logger.SetField("field", "Interactions")
-	equal := c.Interactions.Equals(o.Interactions, logger)
-
-	logger.SetField("field", "Requests")
-	if len(c.Requests) != len(o.Requests) {
-		equal = false
-		logger.Debug(
-			"c.Requests and o.Requests have different sizes",
-			"len(c.Requests)", len(c.Requests),
-			"len(o.Requests)", len(o.Requests),
-		)
-	}
-	for reqID, req := range c.Requests {
-		logger.SetField("reqID", reqID)
-		oreq, ok := o.Requests[reqID]
-		if !ok {
-			logger.Debug("o.Requests is missing entry", "reqID", reqID)
-			equal = false
-		} else {
-			if !req.Equals(oreq, logger) {
-				equal = false
-			}
+			dest.ErrorsByType[errType] = srcCount
 		}
 	}
 
-	logger.PopFields()
-	return equal
+	// merge response times histogram (assuming all bins are precisely the same
+	// for the stats)
+	for bin, srcCount := range src.ResponseTimes.TimeBins {
+		dest.ResponseTimes.TimeBins[bin] += srcCount
+	}
 }
 
-// WriteSummary will output CSV data using the given writer.
-func (c *ClientSummaryStats) WriteSummary(w io.Writer) error {
-	headings := []string{"Description", "Errors", "Avg Time", "Min Time", "Max Time", "Total Count"}
-	csvWriter := csv.NewWriter(w)
-	if err := csvWriter.Write(headings); err != nil {
-		return err
+// MergeCombinedStats will merge the given src CombinedStats object's contents
+// into the dest object.
+func MergeCombinedStats(dest, src *messages.CombinedStats) {
+	dest.TotalInteractionTime += src.TotalInteractionTime
+	MergeSummaryStats(dest.Interactions, src.Interactions)
+	for srcReqName, srcReqStats := range src.Requests {
+		MergeSummaryStats(dest.Requests[srcReqName], srcReqStats)
 	}
-	row := []string{"Interactions"}
-	row = append(row, c.Interactions.SummaryCSV()...)
-	if err := csvWriter.Write(row); err != nil {
-		return err
+}
+
+// LogStats is a utility function to log the given statistics for easy reading.
+func LogStats(logger logging.Logger, stats *messages.CombinedStats) {
+	avgTime := math.Round(float64(stats.Interactions.TotalTime) / float64(stats.Interactions.Count))
+	intsPerSec := float64(0)
+	if avgTime > 0 {
+		// avgTime is ns - needs to be converted to seconds
+		intsPerSec = 1 / (avgTime / float64(time.Second))
 	}
-	requestIDs := []string{}
-	for rid := range c.Requests {
-		requestIDs = append(requestIDs, rid)
+	totalAvgTime := math.Round(float64(stats.TotalInteractionTime) / float64(stats.Interactions.Count))
+	totalIntsPerSec := float64(0)
+	if totalAvgTime > 0 {
+		totalIntsPerSec = 1 / (totalAvgTime / float64(time.Second))
 	}
-	sort.Slice(requestIDs, func(i, j int) bool {
-		return strings.Compare(requestIDs[i], requestIDs[j]) < 0
+	logger.Info("Stats: Interactions", "TotalInteractionTime", time.Duration(stats.TotalInteractionTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "Count", stats.Interactions.Count)
+	logger.Info("Stats: Interactions", "Errors", stats.Interactions.Errors)
+	logger.Info("Stats: Interactions", "TotalTime", time.Duration(stats.Interactions.TotalTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "MinTime", time.Duration(stats.Interactions.MinTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "MaxTime", time.Duration(stats.Interactions.MaxTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "AvgTime", time.Duration(avgTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "TotalAvgTime", time.Duration(totalAvgTime)*time.Nanosecond)
+	logger.Info("Stats: Interactions", "IntsPerSec", intsPerSec)
+	logger.Info("Stats: Interactions", "TotalIntsPerSec", totalIntsPerSec)
+
+	// work out the top 10 errors
+	errorsByType := make([]flattenedError, 0)
+	for errStr, count := range stats.Interactions.ErrorsByType {
+		errorsByType = append(errorsByType, flattenedError{errorType: errStr, count: count})
+	}
+	sort.SliceStable(errorsByType[:], func(i, j int) bool {
+		return errorsByType[i].count > errorsByType[j].count
 	})
-	for _, rid := range requestIDs {
-		row = []string{rid}
-		row = append(row, c.Requests[rid].SummaryCSV()...)
-		if err := csvWriter.Write(row); err != nil {
-			return err
-		}
+	for i := 0; i < 10 && i < len(errorsByType); i++ {
+		logger.Info("Stats: Interactions - Errors", errorsByType[i].errorType, errorsByType[i].count)
 	}
-	csvWriter.Flush()
-	return nil
+}
+
+// NewResponseTimeHistogram instantiates an empty response time histogram with
+// the given timeout as an upper bound on the size of the histogram.
+func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHistogram {
+	timeoutNs := int64(timeout) / int64(time.Nanosecond)
+	binSize := int64(math.Ceil(float64(timeoutNs) / float64(DefaultHistogramBinCount)))
+	timeBins := make(map[int64]int64)
+	for i := int64(0); i <= DefaultHistogramBinCount; i++ {
+		timeBins[i*binSize] = 0
+	}
+	return &messages.ResponseTimeHistogram{
+		Timeout:  timeoutNs,
+		BinSize:  binSize,
+		BinCount: DefaultHistogramBinCount + 1,
+		TimeBins: timeBins,
+	}
 }

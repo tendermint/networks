@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -21,13 +22,15 @@ type Config struct {
 
 // MasterConfig provides the configuration for the load testing master.
 type MasterConfig struct {
-	Bind         string `toml:"bind"`          // The address to which to bind the master (host:port).
-	ExpectSlaves int    `toml:"expect_slaves"` // The number of slaves to expect to connect before starting the load test.
-	ResultsDir   string `toml:"results_dir"`   // The root of the results output directory.
+	Bind               string            `toml:"bind"`                 // The address to which to bind the master (host:port).
+	ExpectSlaves       int               `toml:"expect_slaves"`        // The number of slaves to expect to connect before starting the load test.
+	ExpectSlavesWithin ParseableDuration `toml:"expect_slaves_within"` // The time period within which to expect to hear from all slaves, otherwise causes a failure.
+	ResultsDir         string            `toml:"results_dir"`          // The root of the results output directory.
 }
 
 // SlaveConfig provides configuration specific to the load testing slaves.
 type SlaveConfig struct {
+	Bind   string `toml:"bind"`   // The address to which to bind slave nodes (host:port).
 	Master string `toml:"master"` // The master's external address (host:port).
 }
 
@@ -182,6 +185,20 @@ func (c *TestNetworkConfig) RandomTarget() *TestNetworkTargetConfig {
 	return &c.Targets[int(rand.Int31())%len(c.Targets)]
 }
 
+// GetTargetRPCURLs will return a simple, flattened list of URLs for all of the
+// target nodes' RPC addresses.
+func (c *TestNetworkConfig) GetTargetRPCURLs() []string {
+	urls := make([]string, 0)
+	for _, target := range c.Targets {
+		rpcPort := target.RPCPort
+		if rpcPort == 0 {
+			rpcPort = c.RPCPort
+		}
+		urls = append(urls, fmt.Sprintf("%s:%d", target.Host, rpcPort))
+	}
+	return urls
+}
+
 //
 // TestNetworkTargetConfig
 //
@@ -198,11 +215,11 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 //
 
 func (c *ClientConfig) Validate() error {
-	if clientFactory := GetTestHarnessClientFactory(c.Type); clientFactory == nil {
+	if clientFactory := GetClientFactory(c.Type); clientFactory == nil {
 		return NewError(
 			ErrInvalidConfig,
 			nil,
-			fmt.Sprintf("client type is unrecognized (supported: %s)", GetSupportedTestHarnessClientFactoryTypes()),
+			fmt.Sprintf("client type is unrecognized (supported: %s)", strings.Join(GetSupportedClientFactoryIDs(), ",")),
 		)
 	}
 	if c.Spawn < 1 {

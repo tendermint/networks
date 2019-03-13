@@ -4,171 +4,138 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tendermint/networks/internal/logging"
 	"github.com/tendermint/networks/pkg/loadtest"
+	"github.com/tendermint/networks/pkg/loadtest/messages"
 )
 
-func TestSummaryStats(t *testing.T) {
-	s := loadtest.NewSummaryStats(10 * time.Second)
-	if len(s.TimeBins) != loadtest.DefaultStatsHistogramBins+1 {
-		t.Fatalf("Expected %d time bins in summary stats, but got %d", loadtest.DefaultStatsHistogramBins, len(s.TimeBins))
-	}
+func TestSummaryStatsMerging(t *testing.T) {
 	testCases := []struct {
-		timeTaken int64
-		totalTime int64
-		bin       int
-		binCount  int
+		dest     *messages.SummaryStats
+		src      *messages.SummaryStats
+		expected *messages.SummaryStats
 	}{
-		{500, 500, 500, 1},
-		{2000, 2500, 2000, 1},
-		{2050, 4550, 2000, 2},
-		{2800, 7350, 2800, 1},
-		{3000, 10350, 3000, 1},
-		{3010, 13360, 3000, 2},
-		{3090, 16450, 3000, 3}, // testing truncation to the lower bin
+		{
+			dest:     loadtest.NewSummaryStats(1 * time.Second),
+			src:      loadtest.NewSummaryStats(1 * time.Second),
+			expected: loadtest.NewSummaryStats(1 * time.Second),
+		},
+		{
+			dest: &messages.SummaryStats{
+				Count:     100,
+				Errors:    5,
+				TotalTime: 100000,
+				MinTime:   100,
+				MaxTime:   1000,
+				ErrorsByType: map[string]int64{
+					"error1": 5,
+					"error2": 10,
+				},
+				ResponseTimes: &messages.ResponseTimeHistogram{
+					Timeout:  1000,
+					BinSize:  200,
+					BinCount: 6,
+					TimeBins: map[int64]int64{
+						0:    1,
+						200:  2,
+						400:  3,
+						600:  4,
+						800:  5,
+						1000: 6,
+					},
+				},
+			},
+			src: &messages.SummaryStats{
+				Count:     120,
+				Errors:    3,
+				TotalTime: 100000,
+				MinTime:   90,
+				MaxTime:   900,
+				ErrorsByType: map[string]int64{
+					"error1": 3,
+					"error3": 15,
+				},
+				ResponseTimes: &messages.ResponseTimeHistogram{
+					Timeout:  1000,
+					BinSize:  200,
+					BinCount: 6,
+					TimeBins: map[int64]int64{
+						0:    6,
+						200:  5,
+						400:  4,
+						600:  3,
+						800:  2,
+						1000: 1,
+					},
+				},
+			},
+			expected: &messages.SummaryStats{
+				Count:     220,
+				Errors:    8,
+				TotalTime: 200000,
+				MinTime:   90,
+				MaxTime:   1000,
+				ErrorsByType: map[string]int64{
+					"error1": 8,
+					"error2": 10,
+					"error3": 15,
+				},
+				ResponseTimes: &messages.ResponseTimeHistogram{
+					Timeout:  1000,
+					BinSize:  200,
+					BinCount: 6,
+					TimeBins: map[int64]int64{
+						0:    7,
+						200:  7,
+						400:  7,
+						600:  7,
+						800:  7,
+						1000: 7,
+					},
+				},
+			},
+		},
 	}
 	for i, tc := range testCases {
-		s.Add(tc.timeTaken, nil)
-
-		if tc.totalTime != s.TotalTime {
-			t.Errorf("Test case %d: Expected total time to be %d but was %d", i, tc.totalTime, s.TotalTime)
-		}
-		count, ok := s.TimeBins[tc.bin]
-		if !ok {
-			t.Errorf("Test case %d: Expected bin %d to be present, but it was not", i, tc.bin)
-		}
-		if tc.binCount != count {
-			t.Errorf("Test case %d: Expected bin %d to contain value %d, but was %d", i, tc.bin, tc.binCount, count)
-		}
+		t.Logf("Executing test case %d", i)
+		loadtest.MergeSummaryStats(tc.dest, tc.src)
+		assertSummaryStatsEqual(t, tc.expected, tc.dest)
 	}
 }
 
-func TestClientSummaryStatsMerge(t *testing.T) {
-	testCases := []struct {
-		summaries []*loadtest.ClientSummaryStats
-		expected  *loadtest.ClientSummaryStats
-	}{
-		// TEST CASE 1: Single summary in
-		{
-			summaries: []*loadtest.ClientSummaryStats{
-				&loadtest.ClientSummaryStats{
-					Interactions: &loadtest.SummaryStats{
-						Count:     10,
-						Errors:    0,
-						TotalTime: 10000,
-						AvgTime:   1000.0,
-						MinTime:   1000,
-						MaxTime:   1000,
-						TimeBins: map[int]int{
-							0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
-						},
-						ErrorsByType: map[string]int{},
-						Timeout:      5000,
-						BinSize:      1000,
-						BinCount:     6,
-					},
-					Requests: map[string]*loadtest.SummaryStats{},
-				},
-			},
-			expected: &loadtest.ClientSummaryStats{
-				Interactions: &loadtest.SummaryStats{
-					Count:     10,
-					Errors:    0,
-					TotalTime: 10000,
-					AvgTime:   1000.0,
-					MinTime:   1000,
-					MaxTime:   1000,
-					TimeBins: map[int]int{
-						0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
-					},
-					ErrorsByType: map[string]int{},
-					Timeout:      5000,
-					BinSize:      1000,
-					BinCount:     6,
-				},
-				Requests: map[string]*loadtest.SummaryStats{},
-			},
-		},
-		// TEST CASE 2: Two summaries
-		{
-			summaries: []*loadtest.ClientSummaryStats{
-				&loadtest.ClientSummaryStats{
-					Interactions: &loadtest.SummaryStats{
-						Count:     10,
-						Errors:    0,
-						TotalTime: 10000,
-						AvgTime:   1000.0,
-						MinTime:   1000,
-						MaxTime:   1000,
-						TimeBins: map[int]int{
-							0: 0, 1000: 10, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
-						},
-						ErrorsByType: map[string]int{},
-						Timeout:      5000,
-						BinSize:      1000,
-						BinCount:     6,
-					},
-					Requests: map[string]*loadtest.SummaryStats{},
-				},
-				&loadtest.ClientSummaryStats{
-					Interactions: &loadtest.SummaryStats{
-						Count:     10,
-						Errors:    0,
-						TotalTime: 20000,
-						AvgTime:   2000.0,
-						MinTime:   2000,
-						MaxTime:   2000,
-						TimeBins: map[int]int{
-							0: 0, 1000: 0, 2000: 10, 3000: 0, 4000: 0, 5000: 0,
-						},
-						ErrorsByType: map[string]int{},
-						Timeout:      5000,
-						BinSize:      1000,
-						BinCount:     6,
-					},
-					Requests: map[string]*loadtest.SummaryStats{},
-				},
-			},
-			expected: &loadtest.ClientSummaryStats{
-				Interactions: &loadtest.SummaryStats{
-					Count:     20,
-					Errors:    0,
-					TotalTime: 30000,
-					AvgTime:   1500.0,
-					MinTime:   1000,
-					MaxTime:   2000,
-					TimeBins: map[int]int{
-						0: 0, 1000: 10, 2000: 10, 3000: 0, 4000: 0, 5000: 0,
-					},
-					ErrorsByType: map[string]int{},
-					Timeout:      5000,
-					BinSize:      1000,
-					BinCount:     6,
-				},
-				Requests: map[string]*loadtest.SummaryStats{},
-			},
-		},
+func assertSummaryStatsEqual(t *testing.T, expected, actual *messages.SummaryStats) {
+	if expected.Count != actual.Count {
+		t.Errorf("Expected Count field to be %d, but was %d", expected.Count, actual.Count)
 	}
-	logger := logging.NewLogrusLogger("test")
-	for i, tc := range testCases {
-		actual := &loadtest.ClientSummaryStats{
-			Interactions: &loadtest.SummaryStats{
-				TimeBins: map[int]int{
-					0: 0, 1000: 0, 2000: 0, 3000: 0, 4000: 0, 5000: 0,
-				},
-				Timeout:  5000,
-				BinSize:  1000,
-				BinCount: 6,
-			},
-			Requests: map[string]*loadtest.SummaryStats{},
+	if expected.Errors != actual.Errors {
+		t.Errorf("Expected Errors field to be %d, but was %d", expected.Errors, actual.Errors)
+	}
+	if expected.TotalTime != actual.TotalTime {
+		t.Errorf("Expected TotalTime field to be %d, but was %d", expected.TotalTime, actual.TotalTime)
+	}
+	if expected.MinTime != actual.MinTime {
+		t.Errorf("Expected MinTime field to be %d, but was %d", expected.MinTime, actual.MinTime)
+	}
+	if expected.MaxTime != actual.MaxTime {
+		t.Errorf("Expected MaxTime field to be %d, but was %d", expected.MaxTime, actual.MaxTime)
+	}
+	for k, expectedCount := range expected.ErrorsByType {
+		actualCount, ok := actual.ErrorsByType[k]
+		if !ok {
+			t.Errorf("Expected ErrorsByType field %s to be present, but was not", k)
+		} else {
+			if expectedCount != actualCount {
+				t.Errorf("Expected count for ErrorsByType field %s to be %d, but was %d", k, expectedCount, actualCount)
+			}
 		}
-		for _, stats := range tc.summaries {
-			actual.Merge(stats)
-		}
-		actual.Compute()
-
-		if !tc.expected.Equals(actual, logger) {
-			t.Errorf("Test case %d: Expected %v but got %v", i, tc.expected, actual)
+	}
+	for bin, expectedCount := range expected.ResponseTimes.TimeBins {
+		actualCount, ok := actual.ResponseTimes.TimeBins[bin]
+		if !ok {
+			t.Errorf("Expected ResponseTimes.TimeBins field %d to be present, but was not", bin)
+		} else {
+			if expectedCount != actualCount {
+				t.Errorf("Expected count for ResponseTimes.TimeBins[%d] to be %d, but was %d", bin, expectedCount, actualCount)
+			}
 		}
 	}
 }
