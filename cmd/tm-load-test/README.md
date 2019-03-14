@@ -20,24 +20,27 @@ Create some configuration for your master node (`load-test.toml`):
 ```toml
 [master]
 # The host IP/port to which to bind the master
-bind = "192.168.1.1:35000"
+bind = "127.0.0.1:35000"
 
 # How many slaves to expect to connect before starting the load test
 expect_slaves = 2
 
-# The folder where tm-load-test will dump results. A sub-folder will be created
-# in this folder according to the name of this configuration file: so if this
-# file is called "load-test.toml", a folder called "load-test" will be created
-# in the results directory.
-# NOTE: If a relative path is supplied (starting with a "."), the resulting
-# path will be relative to this configuration file.
+# How long to wait for slaves to connect before considering the load test a
+# failure (if not all slaves have connected within this time period)
+expect_slaves_within = "1m"
+
+# The folder where tm-load-test will dump results.
 results_dir = "./results"
 
 [slave]
+# The IP address/port to which to bind the slave node. Leave out the port to
+# pick a random port.
+bind = "0.0.0.0:"
+
 # IP address and port through which to reach the master (could be different
 # from the bind address above, e.g. if the master is bound to 0.0.0.0:35000,
 # we still need an external address through which to access the master).
-master = "192.168.1.1:35000"
+master = "127.0.0.1:35000"
 
 [test-network]
 # Do we want to collect Prometheus stats during the load testing too?
@@ -76,10 +79,9 @@ prometheus_poll_timeout = "1s"
     host = "192.168.2.3"
 
 [clients]
-# What type of client to spawn. There are 2 provided client types at present:
-# `kvstore_http` (interacts with the `kvstore` proxy app via HTTP), and
-# `kvstore_websockets` (interacts with the `kvstore` proxy app via WebSockets).
-type = "kvstore_http"
+# What type of client to spawn. The `tmrpc` type uses the Tendermint client for
+# interacting with remote Tendermint nodes' RPC endpoints.
+type = "tmrpc"
 
 # The number of clients to spawn per slave.
 spawn = 500
@@ -134,33 +136,5 @@ tm-load-test -c load-test.toml -slave
 ```
 
 ## Statistics
-The following statistics will be available through the results created in the
-`results_dir`. Where relevant, each file will have a corresponding `*-dist.csv`
-file which will show a distribution (i.e. histogram) of the results.
-
-### Tendermint-specific statistics
-* Consensus-specific statistics
-    * `consensus-rounds.csv` - The number of consensus rounds over time.
-    * `consensus-txs-per-block.csv` - The number of transactions per block, over
-      time.
-    * `consensus-block-interval.csv` - The block interval (in seconds) over
-      time.
-* Mempool-related statistics
-    * `mempool-size.csv` - The size of the mempool in transactions, over time.
-    * `mempool-failed-txs.csv` - The number of failed mempool transactions over
-      time.
-    * `mempool-rechecks.csv` - The number of mempool rechecks over time.
-* Summary statistics (min, max, mean, std. deviation for each of the above, in
-  `tendermint-summary.csv`).
-
-### Request-related statistics
-* Request-related statistics
-    * `request-times.csv` - The min/max/average request times over time.
-    * `request-rates.csv` - The min/max/average request rates over time.
-    * `request-failures.csv` - The number of request failures over time.
-* Interaction-related statistics (1 interaction = multiple requests)
-    * `interaction-times.csv` - The min/max/average request times over time.
-    * `interaction-rates.csv` - The min/max/average interaction rates over time.
-    * `interaction-failures.csv` - The number of interaction failures over time.
-* Summary statistics for the test (min, max, mean, std. deviation for each of
-  the above, in `request-summary.csv`).
+Overall summary statistics will be written to a file called `summary.csv` in the
+`results_dir` output folder.
