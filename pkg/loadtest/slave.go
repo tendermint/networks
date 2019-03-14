@@ -175,7 +175,7 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 	finalStats := <-finalStatsc
 	finalStats.TotalInteractionTime = int64(totalInteractionTime / time.Nanosecond)
 	s.logger.Info("Load testing complete")
-	LogStats(s.logger, finalStats)
+	LogStats(logging.NewLogrusLogger(""), finalStats)
 	// inform the slave about the final statistics
 	ctx.Send(slavePID, &messages.SlaveFinished{Sender: slavePID, Stats: finalStats})
 }

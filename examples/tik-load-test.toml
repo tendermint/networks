@@ -82,7 +82,7 @@ spawn_rate = 10.0
 # by a GET operation for that same key, ensuring the stored value matches the
 # returned value. Set to -1 to make this "infinite", but then the
 # `max_test_time` parameter MUST be set.
-max_interactions = 100
+max_interactions = 10
 
 # The maximum amount of time to allow for load testing. If this is exceeded,
 # the test will be brought to and end.
@@ -91,10 +91,10 @@ max_test_time = "10m"
 # The maximum time to wait before each request in an interaction. The actual
 # wait times will be uniformly randomly distributed between `request_wait_min`
 # and `request_wait_max`.
-request_wait_min = "50ms"
+request_wait_min = "2000ms"
 
 # The minimum time to wait before request in an interaction.
-request_wait_max = "100ms"
+request_wait_max = "2000ms"
 
 # After how long do we consider a request to have timed out?
 request_timeout = "5s"

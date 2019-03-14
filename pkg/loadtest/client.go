@@ -22,6 +22,7 @@ type ClientParams struct {
 	RequestWaitMin     time.Duration // The minimum time to wait prior to executing a request.
 	RequestWaitMax     time.Duration // The maximum time to wait prior to executing a request.
 	RequestTimeout     time.Duration // The maximum time to allow for a request.
+	TotalClients       int64         // The total number of clients for which to initialize the load testing.
 }
 
 // ClientFactory produces clients.
@@ -85,7 +86,7 @@ func GetSupportedClientFactoryIDs() []string {
 // Client helpers
 //
 
-// MakeTxKV returns a text transaction, allong with expected key, value pair
+// MakeTxKV returns a text transaction, along with expected key, value pair
 func MakeTxKV() ([]byte, []byte, []byte) {
 	k := []byte(cmn.RandStr(8))
 	v := []byte(cmn.RandStr(8))
@@ -95,7 +96,11 @@ func MakeTxKV() ([]byte, []byte, []byte) {
 // RandomSleep will sleep for a random period of between the given minimum and
 // maximum times.
 func RandomSleep(minSleep, maxSleep time.Duration) {
-	time.Sleep(minSleep + time.Duration(rand.Int63n(int64(maxSleep)-int64(minSleep))))
+	if minSleep == maxSleep {
+		time.Sleep(minSleep)
+	} else {
+		time.Sleep(minSleep + time.Duration(rand.Int63n(int64(maxSleep)-int64(minSleep))))
+	}
 }
 
 //
@@ -111,8 +116,8 @@ func (f *NoopClientFactory) NewClient(params ClientParams) Client {
 
 func (f *NoopClientFactory) NewStats(_ ClientParams) *messages.CombinedStats {
 	return &messages.CombinedStats{
-		Interactions: NewSummaryStats(1 * time.Minute),
-		Requests:     make(map[string]*messages.SummaryStats),
+		Interactions: NewSummaryStats(1*time.Minute, 1),
+		Requests:     make(map[string]*messages.SummaryStats, 1),
 	}
 }
 
@@ -167,10 +172,10 @@ var _ Client = (*RPCClient)(nil)
 // NewStats initializes an empty CombinedStats object for this RPC client.
 func (f *RPCClientFactory) NewStats(params ClientParams) *messages.CombinedStats {
 	return &messages.CombinedStats{
-		Interactions: NewSummaryStats(params.InteractionTimeout),
+		Interactions: NewSummaryStats(params.InteractionTimeout, params.TotalClients),
 		Requests: map[string]*messages.SummaryStats{
-			"broadcast_tx_sync": NewSummaryStats(params.RequestTimeout),
-			"abci_query":        NewSummaryStats(params.RequestTimeout),
+			"broadcast_tx_sync": NewSummaryStats(params.RequestTimeout, params.TotalClients),
+			"abci_query":        NewSummaryStats(params.RequestTimeout, params.TotalClients),
 		},
 	}
 }
@@ -205,6 +210,7 @@ func NewRPCClient(factory *RPCClientFactory, targetURLs []string, interactionTim
 			RequestWaitMin:     requestWaitMin,
 			RequestWaitMax:     requestWaitMax,
 			RequestTimeout:     requestTimeout,
+			TotalClients:       1, // This is considered to be a single client.
 		}),
 	}
 }
@@ -230,7 +236,7 @@ func (c *RPCClient) Interact() {
 
 	RandomSleep(c.requestWaitMin, c.requestWaitMax)
 	startTime = time.Now()
-	qres, err := c.randomTarget().ABCIQuery("", k)
+	qres, err := c.randomTarget().ABCIQuery("/key", k)
 	requestTimeTaken = time.Since(startTime)
 	totalTimeTaken += requestTimeTaken
 	AddStatistic(c.stats.Requests["abci_query"], requestTimeTaken, err)
@@ -242,8 +248,11 @@ func (c *RPCClient) Interact() {
 		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Failed to execute ABCIQuery: %s", qres.Response.String()))
 		return
 	}
+	if len(qres.Response.Value) == 0 {
+		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Key/value pair could not be found"))
+		return
+	}
 	if !bytes.Equal(v, qres.Response.Value) {
-		fmt.Printf("v = %v, qres.Response.Value = %v\n", v, qres.Response.Value)
 		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Retrieved value does not match stored value"))
 		return
 	}

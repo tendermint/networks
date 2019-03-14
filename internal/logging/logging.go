@@ -39,8 +39,14 @@ var _ Logger = (*NoopLogger)(nil)
 
 // NewLogrusLogger will instantiate a logger with the given context.
 func NewLogrusLogger(ctx string, kvpairs ...interface{}) Logger {
+	var logger *logrus.Entry
+	if len(ctx) > 0 {
+		logger = logrus.WithField("ctx", ctx)
+	} else {
+		logger = logrus.NewEntry(logrus.New())
+	}
 	return &LogrusLogger{
-		logger:          logrus.WithField("ctx", ctx),
+		logger:          logger,
 		ctx:             ctx,
 		fields:          serializeKVPairs(kvpairs),
 		mtx:             &sync.Mutex{},

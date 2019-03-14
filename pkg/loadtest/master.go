@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"path"
 	"sync"
 	"time"
 
@@ -179,7 +180,7 @@ func (m *Master) kill(ctx actor.Context) {
 }
 
 func (m *Master) shutdown(ctx actor.Context, err error) {
-	m.logStats()
+	m.writeStats()
 	if err != nil {
 		m.logger.Error("Shutting down master node", "err", err)
 	} else {
@@ -197,8 +198,12 @@ func (m *Master) updateStats(stats *messages.CombinedStats) {
 	m.mtx.Unlock()
 }
 
-func (m *Master) logStats() {
+func (m *Master) writeStats() {
 	m.mtx.Lock()
-	LogStats(m.logger, m.stats)
+	LogStats(logging.NewLogrusLogger(""), m.stats)
+	filename := path.Join(m.cfg.Master.ResultsDir, "summary.csv")
+	if err := WriteCombinedStatsToFile(filename, m.stats); err != nil {
+		m.logger.Error("Failed to write final statistics to output CSV file", "filename", filename)
+	}
 	m.mtx.Unlock()
 }

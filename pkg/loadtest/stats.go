@@ -1,9 +1,14 @@
 package loadtest
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/tendermint/networks/internal/logging"
@@ -15,14 +20,30 @@ import (
 // A value of 100 will give us percentiles.
 const DefaultHistogramBinCount int64 = 100
 
-type flattenedError struct {
-	errorType string
-	count     int64
+// FlattenedError is the key/value pair from
+// `messages.SummaryStats.ErrorsByType` flattened into a structure for easy
+// sorting.
+type FlattenedError struct {
+	ErrorType string
+	Count     int64
+}
+
+// CalculatedStats includes a number of parameters that can be calculated from a
+// `messages.SummaryStats` object.
+type CalculatedStats struct {
+	AvgTotalClientTime float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
+	CountPerClient     float64           // Number of interactions/requests per client.
+	AvgTimePerClient   float64           // Average time per interaction/request per client.
+	PerSecPerClient    float64           // Interactions/requests per second per client.
+	PerSec             float64           // Interactions/requests per second overall.
+	FailureRate        float64           // The % of interactions/requests that failed.
+	TopErrors          []*FlattenedError // The top 10 errors by error count.
 }
 
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
-func NewSummaryStats(timeout time.Duration) *messages.SummaryStats {
+func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.SummaryStats {
 	return &messages.SummaryStats{
+		TotalClients:  totalClients,
 		ErrorsByType:  make(map[string]int64),
 		ResponseTimes: NewResponseTimeHistogram(timeout),
 	}
@@ -78,6 +99,7 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 	dest.Count += src.Count
 	dest.Errors += src.Errors
 	dest.TotalTime += src.TotalTime
+	dest.TotalClients += src.TotalClients
 
 	if src.MinTime < dest.MinTime {
 		dest.MinTime = src.MinTime
@@ -113,40 +135,78 @@ func MergeCombinedStats(dest, src *messages.CombinedStats) {
 	}
 }
 
-// LogStats is a utility function to log the given statistics for easy reading.
-func LogStats(logger logging.Logger, stats *messages.CombinedStats) {
-	avgTime := math.Round(float64(stats.Interactions.TotalTime) / float64(stats.Interactions.Count))
-	intsPerSec := float64(0)
-	if avgTime > 0 {
-		// avgTime is ns - needs to be converted to seconds
-		intsPerSec = 1 / (avgTime / float64(time.Second))
-	}
-	totalAvgTime := math.Round(float64(stats.TotalInteractionTime) / float64(stats.Interactions.Count))
-	totalIntsPerSec := float64(0)
-	if totalAvgTime > 0 {
-		totalIntsPerSec = 1 / (totalAvgTime / float64(time.Second))
-	}
-	logger.Info("Stats: Interactions", "TotalInteractionTime", time.Duration(stats.TotalInteractionTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "Count", stats.Interactions.Count)
-	logger.Info("Stats: Interactions", "Errors", stats.Interactions.Errors)
-	logger.Info("Stats: Interactions", "TotalTime", time.Duration(stats.Interactions.TotalTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "MinTime", time.Duration(stats.Interactions.MinTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "MaxTime", time.Duration(stats.Interactions.MaxTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "AvgTime", time.Duration(avgTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "TotalAvgTime", time.Duration(totalAvgTime)*time.Nanosecond)
-	logger.Info("Stats: Interactions", "IntsPerSec", intsPerSec)
-	logger.Info("Stats: Interactions", "TotalIntsPerSec", totalIntsPerSec)
-
-	// work out the top 10 errors
-	errorsByType := make([]flattenedError, 0)
-	for errStr, count := range stats.Interactions.ErrorsByType {
-		errorsByType = append(errorsByType, flattenedError{errorType: errStr, count: count})
+func FlattenedSortedErrors(stats *messages.SummaryStats) []*FlattenedError {
+	errorsByType := make([]*FlattenedError, 0)
+	for errStr, count := range stats.ErrorsByType {
+		errorsByType = append(errorsByType, &FlattenedError{ErrorType: errStr, Count: count})
 	}
 	sort.SliceStable(errorsByType[:], func(i, j int) bool {
-		return errorsByType[i].count > errorsByType[j].count
+		return errorsByType[i].Count > errorsByType[j].Count
 	})
-	for i := 0; i < 10 && i < len(errorsByType); i++ {
-		logger.Info("Stats: Interactions - Errors", errorsByType[i].errorType, errorsByType[i].count)
+	return errorsByType
+}
+
+func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
+	// average total time for all cumulative interactions/requests per client
+	avgTotalClientTime := math.Round(float64(stats.TotalTime) / float64(stats.TotalClients))
+	// number of interactions/requests per client
+	countPerClient := math.Round(float64(stats.Count) / float64(stats.TotalClients))
+	// average time per interaction/request per client
+	avgTimePerClient := float64(0)
+	if countPerClient > 0 {
+		avgTimePerClient = avgTotalClientTime / countPerClient
+	}
+	// interactions/requests per second per client
+	perSecPerClient := float64(0)
+	if avgTotalClientTime > 0 {
+		perSecPerClient = 1 / (avgTimePerClient / float64(time.Second))
+	}
+	// interactions/requests per second overall
+	perSec := perSecPerClient * float64(stats.TotalClients)
+	return &CalculatedStats{
+		AvgTotalClientTime: avgTotalClientTime,
+		CountPerClient:     countPerClient,
+		AvgTimePerClient:   avgTimePerClient,
+		PerSecPerClient:    perSecPerClient,
+		PerSec:             perSec,
+		FailureRate:        float64(100) * (float64(stats.Errors) / float64(stats.Count)),
+		TopErrors:          FlattenedSortedErrors(stats),
+	}
+}
+
+// LogSummaryStats is a utility function for displaying summary statistics
+// through the logging interface. This is useful when working with tm-load-test
+// from the command line.
+func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.SummaryStats) {
+	cs := CalculateStats(stats)
+
+	logger.Info(logPrefix+" total clients", "value", stats.TotalClients)
+	logger.Info(logPrefix+" per second per client", "value", fmt.Sprintf("%.2f", cs.PerSecPerClient))
+	logger.Info(logPrefix+" per second overall", "value", fmt.Sprintf("%.2f", cs.PerSec))
+	logger.Info(logPrefix+" count", "value", stats.Count)
+	logger.Info(logPrefix+" errors", "value", stats.Errors)
+	logger.Info(logPrefix+" failure rate (%)", "value", fmt.Sprintf("%.2f", cs.FailureRate))
+	logger.Info(logPrefix+" min time", "value", time.Duration(stats.MinTime)*time.Nanosecond)
+	logger.Info(logPrefix+" max time", "value", time.Duration(stats.MaxTime)*time.Nanosecond)
+
+	for i := 0; i < 10 && i < len(cs.TopErrors); i++ {
+		logger.Info(logPrefix+fmt.Sprintf(" top error %d", i+1), cs.TopErrors[i].ErrorType, cs.TopErrors[i].Count)
+	}
+}
+
+// LogStats is a utility function to log the given statistics for easy reading,
+// especially from the command line.
+func LogStats(logger logging.Logger, stats *messages.CombinedStats) {
+	logger.Info("")
+	logger.Info("INTERACTION STATISTICS")
+	LogSummaryStats(logger, "Interactions", stats.Interactions)
+
+	logger.Info("")
+	logger.Info("REQUEST STATISTICS")
+	for reqName, reqStats := range stats.Requests {
+		logger.Info(reqName)
+		LogSummaryStats(logger, "  Requests", reqStats)
+		logger.Info("")
 	}
 }
 
@@ -165,4 +225,69 @@ func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHisto
 		BinCount: DefaultHistogramBinCount + 1,
 		TimeBins: timeBins,
 	}
+}
+
+// WriteSummaryStats will write the given summary statistics using the specified
+// CSV writer.
+func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) {
+	cs := CalculateStats(stats)
+	indent := strings.Repeat(" ", indentCount)
+	prefix := indent + linePrefix
+	writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)})
+	writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)})
+	writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)})
+	writer.Write([]string{prefix + " count", fmt.Sprintf("%d", stats.Count)})
+	writer.Write([]string{prefix + " errors", fmt.Sprintf("%d", stats.Errors)})
+	writer.Write([]string{prefix + " failure rate (%)", fmt.Sprintf("%.2f", cs.FailureRate)})
+	writer.Write([]string{prefix + " min time", fmt.Sprintf("%s", time.Duration(stats.MinTime)*time.Nanosecond)})
+	writer.Write([]string{prefix + " max time", fmt.Sprintf("%s", time.Duration(stats.MaxTime)*time.Nanosecond)})
+	writer.Write([]string{prefix + " top errors:"})
+	for i := 0; i < len(cs.TopErrors) && i < 10; i++ {
+		writer.Write([]string{indent + "  " + cs.TopErrors[i].ErrorType, fmt.Sprintf("%d", cs.TopErrors[i].Count)})
+	}
+	writer.Write([]string{prefix + " response time histogram (milliseconds/count):"})
+	for bin := int64(0); bin <= stats.ResponseTimes.Timeout; bin += stats.ResponseTimes.BinSize {
+		writer.Write([]string{
+			indent + "  " + fmt.Sprintf("%d", time.Duration(bin)/time.Millisecond),
+			fmt.Sprintf("%d", stats.ResponseTimes.TimeBins[bin]),
+		})
+	}
+}
+
+// WriteCombinedStats will write the given combined statistics using the
+// specified writer.
+func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) {
+	cw := csv.NewWriter(writer)
+	defer cw.Flush()
+
+	cw.Write([]string{"INTERACTION STATISTICS"})
+	WriteSummaryStats(cw, 0, "Interactions", stats.Interactions)
+
+	cw.Write([]string{})
+	cw.Write([]string{"REQUEST STATISTICS"})
+	i := 0
+	for reqName, reqStats := range stats.Requests {
+		if i > 0 {
+			cw.Write([]string{})
+		}
+		cw.Write([]string{reqName})
+		WriteSummaryStats(cw, 2, "Requests", reqStats)
+		i++
+	}
+}
+
+// WriteCombinedStatsToFile will write the given stats object to the specified
+// output CSV file. If the given output path does not exist, it will be created.
+func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) error {
+	outputPath := path.Dir(outputFile)
+	if err := os.MkdirAll(outputPath, 0755); err != nil {
+		return err
+	}
+	f, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	WriteCombinedStats(f, stats)
+	return nil
 }

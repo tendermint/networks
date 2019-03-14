@@ -15,9 +15,9 @@ func TestSummaryStatsMerging(t *testing.T) {
 		expected *messages.SummaryStats
 	}{
 		{
-			dest:     loadtest.NewSummaryStats(1 * time.Second),
-			src:      loadtest.NewSummaryStats(1 * time.Second),
-			expected: loadtest.NewSummaryStats(1 * time.Second),
+			dest:     loadtest.NewSummaryStats(1*time.Second, 1),
+			src:      loadtest.NewSummaryStats(1*time.Second, 1),
+			expected: loadtest.NewSummaryStats(1*time.Second, 1),
 		},
 		{
 			dest: &messages.SummaryStats{
