@@ -3,7 +3,7 @@ GOBIN?=$(GOPATH)/bin
 SRC_DIR?=$(GOPATH)/src/github.com/tendermint/networks
 BUILD_DIR?=$(SRC_DIR)/build
 .PHONY: build-tm-outage-sim-server build-tm-outage-sim-server-linux \
-	build build-linux \
+	tools tools-linux \
 	clean test lint \
 	get-deps \
 	protos
@@ -37,9 +37,9 @@ build-tm-load-test-linux: get-deps
 		go build -o $(BUILD_DIR)/tm-load-test \
 		$(SRC_DIR)/cmd/tm-load-test/main.go
 
-build: build-tm-outage-sim-server build-tm-load-test
+tools: build-tm-outage-sim-server build-tm-load-test
 
-build-linux: build-tm-outage-sim-server-linux build-tm-load-test-linux
+tools-linux: build-tm-outage-sim-server-linux build-tm-load-test-linux
 
 protos:
 	protoc --gogoslick_out=$(SRC_DIR)/pkg/loadtest/messages/ \
