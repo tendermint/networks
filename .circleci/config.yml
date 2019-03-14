@@ -1,7 +1,28 @@
-version: 2
+version: 2.1
 
 aliases:
+  # Docker images
   - &TERRAGRUNT tendermintdev/terragrunt
+  - &PYTHON python:3.7.2-alpine3.9
+  - &GOLANG circleci/golang:1.11.5
+
+executors:
+  golang:
+    docker:
+      - image: *GOLANG
+    working_directory: /go/src/github.com/cosmos
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+
+  python:
+    docker:
+      - image: *PYTHON
+
+  terragrunt:
+    docker:
+      - image: *TERRAGRUNT
+    environment:
+      AWS_REGION: us-east-1
 
 network: &network
   run:
@@ -30,6 +51,7 @@ ecs: &ecs
       apply_config
       rm ~/plan.output
 
+<<<<<<< HEAD
 tools_defaults: &tools_defaults
   working_directory: /go/src/github.com/tendermint/networks
   docker:
@@ -43,9 +65,11 @@ build_env: &build_env
   environment:
     AWS_REGION: us-east-1
 
+=======
+>>>>>>> master
 jobs:
   build:
-    <<: *build_env
+    executor: terragrunt
     steps:
       - checkout
       - *network
@@ -103,10 +127,36 @@ jobs:
             export PATH="${GOBIN}:${PATH}"
             make test
 
+  build_gaia_sim_image:
+    executor: golang
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build simulation image
+          command: |
+            cd testnet-kitchen/src/simulation/docker/gaia_simulation
+            docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
+            docker build -t tendermintdev/gaia_sim .
+            docker push tendermintdev/gaia_sim
+
+  run_simulation:
+    executor: python
+    steps:
+      - checkout
+      - run:
+          name: Start ECS tasks
+          command: |
+            pip3 install boto3
+            cd testnet-kitchen/src/simulation
+            ./run_simulation.py
+
 workflows:
   version: 2
   ecs_testnet_deployment:
     jobs:
+<<<<<<< HEAD
       - build
 
   tools_test_suite:
@@ -118,3 +168,17 @@ workflows:
       - tools_test:
           requires:
             - tools_setup_dependencies
+=======
+      - build:
+          filters:
+            branches:
+              only:
+                - master
+
+  gaia_simulation:
+    jobs:
+      - build_gaia_sim_image
+      - run_simulation:
+          requires:
+            - build_gaia_sim_image
+>>>>>>> master
