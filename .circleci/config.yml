@@ -51,6 +51,13 @@ ecs: &ecs
       apply_config
       rm ~/plan.output
 
+tools_defaults: &tools_defaults
+  working_directory: /go/src/github.com/tendermint/networks
+  docker:
+    - image: circleci/golang:1.11.5
+  environment:
+    GOBIN: /tmp/workspace/bin
+
 jobs:
   build:
     executor: terragrunt
@@ -152,3 +159,13 @@ workflows:
       - run_simulation:
           requires:
             - build_gaia_sim_image
+  
+  tools_test_suite:
+    jobs:
+      - tools_setup_dependencies
+      - tools_lint:
+          requires:
+            - tools_setup_dependencies
+      - tools_test:
+          requires:
+            - tools_setup_dependencies
