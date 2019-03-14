@@ -44,3 +44,7 @@
 [[constraint]]
   branch = "dev"
   name = "github.com/AsynkronIT/protoactor-go"
+
+[[constraint]]
+  name = "github.com/tendermint/tendermint"
+  version = "v0.30.2"
