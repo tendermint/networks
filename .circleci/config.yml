@@ -51,6 +51,13 @@ ecs: &ecs
       apply_config
       rm ~/plan.output
 
+tools_defaults: &tools_defaults
+  working_directory: /go/src/github.com/tendermint/networks
+  docker:
+    - image: circleci/golang:1.11.5
+  environment:
+    GOBIN: /tmp/workspace/bin
+
 jobs:
   build:
     executor: terragrunt
@@ -58,6 +65,58 @@ jobs:
       - checkout
       - *network
       - *ecs
+    
+  tools_setup_dependencies:
+    <<: *tools_defaults
+    steps:
+      - run: mkdir -p /tmp/workspace/bin
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-pkg-cache
+      - run:
+          name: Get dependencies
+          command: |
+            export PATH="${GOBIN}:${PATH}"
+            make get-deps
+      - save_cache:
+          key: v1-pkg-cache
+          paths:
+            - /go/pkg
+      - save_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+          paths:
+            - /go/src/github.com/tendermint/networks
+
+  tools_lint:
+    <<: *tools_defaults
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - restore_cache:
+          key: v1-pkg-cache
+      - restore_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: Lint
+          command: |
+            export PATH="${GOBIN}:${PATH}"
+            make lint
+
+  tools_test:
+    <<: *tools_defaults
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - restore_cache:
+          key: v1-pkg-cache
+      - restore_cache:
+          key: v1-tree-{{ .Environment.CIRCLE_SHA1 }}
+      - run:
+          name: Test
+          command: |
+            export PATH="${GOBIN}:${PATH}"
+            make test
 
   build_gaia_sim_image:
     executor: golang
@@ -100,3 +159,13 @@ workflows:
       - run_simulation:
           requires:
             - build_gaia_sim_image
+  
+  tools_test_suite:
+    jobs:
+      - tools_setup_dependencies
+      - tools_lint:
+          requires:
+            - tools_setup_dependencies
+      - tools_test:
+          requires:
+            - tools_setup_dependencies

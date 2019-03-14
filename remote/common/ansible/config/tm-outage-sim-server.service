@@ -8,10 +8,10 @@ Restart=on-failure
 User=root
 Group=root
 PermissionsStartOnly=true
-ExecStart=/usr/bin/outage-sim-server
+ExecStart=/usr/bin/tm-outage-sim-server
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=outage-sim-server
+SyslogIdentifier=tm-outage-sim-server
 
 [Install]
 WantedBy=multi-user.target

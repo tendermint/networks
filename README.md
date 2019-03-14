@@ -1,9 +1,12 @@
 # Tendermint Networks
 
-This repository will eventually contain:
+This repository contains tools and scripts to assist in setting up and testing
+[Tendermint](https://tendermint.com) networks.
 
-* Scripts and code for setting up and running Tendermint-based networks using
-  various deployment mechanisms and configuration management schemes.
-* [Test network experiments](testing/README.md)
-  - Configuration scripts
-  - Experimental test results
+## Tools
+The following tools are provided for use during testing of Tendermint networks:
+
+* [tm-load-test](./cmd/tm-load-test/README.md) - A distributed load testing
+  application for Tendermint networks.
+* [tm-outage-sim-server](./cmd/tm-outage-sim-server/README.md) - A Tendermint
+  node outage simulator, for use in CentOS, Debian/Ubuntu environments.

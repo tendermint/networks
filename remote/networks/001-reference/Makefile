@@ -1,11 +1,14 @@
 INVENTORY?=../../inventory/hosts
 LOGS_DIR?=/tmp
 FAST_MODE?=false
+GOPATH?=$(shell go env GOPATH)
+TM_NETWORKS_SRC=$(GOPATH)/src/github.com/tendermint/networks
+TM_OUTAGE_SIM_SERVER_BIN=$(TM_NETWORKS_SRC)/build/tm-outage-sim-server
 .PHONY: deploy fetch-tm-logs status
 
 include ../../common/make/tendermint.mk
 
-deploy: $(TMBIN) ../../common/apps/outage-sim-server/outage-sim-server
+deploy: $(TMBIN) $(TM_OUTAGE_SIM_SERVER_BIN)
 	rm -rf /tmp/nodes/
 	tendermint testnet \
 		--v 4 \
@@ -16,6 +19,7 @@ deploy: $(TMBIN) ../../common/apps/outage-sim-server/outage-sim-server
 	./update-node-config.sh
 	ansible-playbook -i $(INVENTORY) \
 		-e "{\"fast_mode\":${FAST_MODE}}" \
+		-e "{\"tm_outage_sim_server_bin\":\"${TM_OUTAGE_SIM_SERVER_BIN}\"}" \
 		deploy.yml
 	./check-status.sh
 
@@ -26,7 +30,5 @@ status:
 	@SLEEP=0 ./check-status.sh
 
 # Builds our outage simulator server for Linux
-../../common/apps/outage-sim-server/outage-sim-server:
-	GOOS=linux GOARCH=amd64 go build \
-		-o ../../common/apps/outage-sim-server/outage-sim-server \
-		../../common/apps/outage-sim-server/outage_sim_server.go
+$(TM_OUTAGE_SIM_SERVER_BIN):
+	$(MAKE) -C ../../../ build-tm-outage-sim-server-linux
