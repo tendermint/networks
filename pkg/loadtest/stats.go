@@ -229,51 +229,91 @@ func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHisto
 
 // WriteSummaryStats will write the given summary statistics using the specified
 // CSV writer.
-func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) {
+func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) error {
 	cs := CalculateStats(stats)
 	indent := strings.Repeat(" ", indentCount)
 	prefix := indent + linePrefix
-	writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)})
-	writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)})
-	writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)})
-	writer.Write([]string{prefix + " count", fmt.Sprintf("%d", stats.Count)})
-	writer.Write([]string{prefix + " errors", fmt.Sprintf("%d", stats.Errors)})
-	writer.Write([]string{prefix + " failure rate (%)", fmt.Sprintf("%.2f", cs.FailureRate)})
-	writer.Write([]string{prefix + " min time", fmt.Sprintf("%s", time.Duration(stats.MinTime)*time.Nanosecond)})
-	writer.Write([]string{prefix + " max time", fmt.Sprintf("%s", time.Duration(stats.MaxTime)*time.Nanosecond)})
-	writer.Write([]string{prefix + " top errors:"})
-	for i := 0; i < len(cs.TopErrors) && i < 10; i++ {
-		writer.Write([]string{indent + "  " + cs.TopErrors[i].ErrorType, fmt.Sprintf("%d", cs.TopErrors[i].Count)})
+	if err := writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)}); err != nil {
+		return err
 	}
-	writer.Write([]string{prefix + " response time histogram (milliseconds/count):"})
+	if err := writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " count", fmt.Sprintf("%d", stats.Count)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " errors", fmt.Sprintf("%d", stats.Errors)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " failure rate (%)", fmt.Sprintf("%.2f", cs.FailureRate)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " min time", fmt.Sprintf("%s", time.Duration(stats.MinTime)*time.Nanosecond)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " max time", fmt.Sprintf("%s", time.Duration(stats.MaxTime)*time.Nanosecond)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " top errors:"}); err != nil {
+		return err
+	}
+	for i := 0; i < len(cs.TopErrors) && i < 10; i++ {
+		if err := writer.Write([]string{indent + "  " + cs.TopErrors[i].ErrorType, fmt.Sprintf("%d", cs.TopErrors[i].Count)}); err != nil {
+			return err
+		}
+	}
+	if err := writer.Write([]string{prefix + " response time histogram (milliseconds/count):"}); err != nil {
+		return err
+	}
 	for bin := int64(0); bin <= stats.ResponseTimes.Timeout; bin += stats.ResponseTimes.BinSize {
-		writer.Write([]string{
+		if err := writer.Write([]string{
 			indent + "  " + fmt.Sprintf("%d", time.Duration(bin)/time.Millisecond),
 			fmt.Sprintf("%d", stats.ResponseTimes.TimeBins[bin]),
-		})
+		}); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // WriteCombinedStats will write the given combined statistics using the
 // specified writer.
-func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) {
+func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 	cw := csv.NewWriter(writer)
 	defer cw.Flush()
 
-	cw.Write([]string{"INTERACTION STATISTICS"})
-	WriteSummaryStats(cw, 0, "Interactions", stats.Interactions)
+	if err := cw.Write([]string{"INTERACTION STATISTICS"}); err != nil {
+		return err
+	}
+	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions); err != nil {
+		return err
+	}
 
-	cw.Write([]string{})
-	cw.Write([]string{"REQUEST STATISTICS"})
+	if err := cw.Write([]string{}); err != nil {
+		return err
+	}
+	if err := cw.Write([]string{"REQUEST STATISTICS"}); err != nil {
+		return err
+	}
 	i := 0
 	for reqName, reqStats := range stats.Requests {
 		if i > 0 {
-			cw.Write([]string{})
+			if err := cw.Write([]string{}); err != nil {
+				return err
+			}
 		}
-		cw.Write([]string{reqName})
-		WriteSummaryStats(cw, 2, "Requests", reqStats)
+		if err := cw.Write([]string{reqName}); err != nil {
+			return err
+		}
+		if err := WriteSummaryStats(cw, 2, "Requests", reqStats); err != nil {
+			return err
+		}
 		i++
 	}
+	return nil
 }
 
 // WriteCombinedStatsToFile will write the given stats object to the specified
@@ -288,6 +328,5 @@ func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) 
 		return err
 	}
 	defer f.Close()
-	WriteCombinedStats(f, stats)
-	return nil
+	return WriteCombinedStats(f, stats)
 }
