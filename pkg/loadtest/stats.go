@@ -251,10 +251,10 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	if err := writer.Write([]string{prefix + " failure rate (%)", fmt.Sprintf("%.2f", cs.FailureRate)}); err != nil {
 		return err
 	}
-	if err := writer.Write([]string{prefix + " min time", fmt.Sprintf("%s", time.Duration(stats.MinTime)*time.Nanosecond)}); err != nil {
+	if err := writer.Write([]string{prefix + " min time", (time.Duration(stats.MinTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
-	if err := writer.Write([]string{prefix + " max time", fmt.Sprintf("%s", time.Duration(stats.MaxTime)*time.Nanosecond)}); err != nil {
+	if err := writer.Write([]string{prefix + " max time", (time.Duration(stats.MaxTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " top errors:"}); err != nil {
