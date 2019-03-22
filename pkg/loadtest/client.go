@@ -222,41 +222,44 @@ func (c *RPCClient) randomTarget() *client.HTTP {
 // Interact will attempt to put a value into a Tendermint node, and then, after
 // a small delay, attempt to retrieve it.
 func (c *RPCClient) Interact() {
+	interactionStartTime := time.Now()
+	absStartTime := interactionStartTime
 	RandomSleep(c.requestWaitMin, c.requestWaitMax)
 	k, v, tx := MakeTxKV()
 	startTime := time.Now()
 	_, err := c.randomTarget().BroadcastTxSync(tx)
 	requestTimeTaken := time.Since(startTime)
 	totalTimeTaken := requestTimeTaken
-	AddStatistic(c.stats.Requests["broadcast_tx_sync"], requestTimeTaken, err)
+	AddStatistic(c.stats.Requests["broadcast_tx_sync"], requestTimeTaken, time.Since(absStartTime), err)
 	if err != nil {
-		AddStatistic(c.stats.Interactions, totalTimeTaken, err)
+		AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), err)
 		return
 	}
 
+	absStartTime = time.Now()
 	RandomSleep(c.requestWaitMin, c.requestWaitMax)
 	startTime = time.Now()
 	qres, err := c.randomTarget().ABCIQuery("/key", k)
 	requestTimeTaken = time.Since(startTime)
 	totalTimeTaken += requestTimeTaken
-	AddStatistic(c.stats.Requests["abci_query"], requestTimeTaken, err)
+	AddStatistic(c.stats.Requests["abci_query"], requestTimeTaken, time.Since(absStartTime), err)
 	if err != nil {
-		AddStatistic(c.stats.Interactions, totalTimeTaken, err)
+		AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), err)
 		return
 	}
 	if qres.Response.IsErr() {
-		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Failed to execute ABCIQuery: %s", qres.Response.String()))
+		AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), fmt.Errorf("Failed to execute ABCIQuery: %s", qres.Response.String()))
 		return
 	}
 	if len(qres.Response.Value) == 0 {
-		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Key/value pair could not be found"))
+		AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), fmt.Errorf("Key/value pair could not be found"))
 		return
 	}
 	if !bytes.Equal(v, qres.Response.Value) {
-		AddStatistic(c.stats.Interactions, totalTimeTaken, fmt.Errorf("Retrieved value does not match stored value"))
+		AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), fmt.Errorf("Retrieved value does not match stored value"))
 		return
 	}
-	AddStatistic(c.stats.Interactions, totalTimeTaken, err)
+	AddStatistic(c.stats.Interactions, totalTimeTaken, time.Since(interactionStartTime), err)
 }
 
 // GetStats returns the aggregated interaction and request statistics for all of
