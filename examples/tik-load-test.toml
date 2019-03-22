@@ -37,8 +37,6 @@ prometheus_poll_interval = "10s"
 prometheus_poll_timeout = "1s"
 
     [[test_network.targets]]
-    # A short, descriptive identifier for this host
-    id = "tik0"
     host = "tik0.sredev.co"
 
     # To override the default RPC/Prometheus ports
@@ -51,15 +49,12 @@ prometheus_poll_timeout = "1s"
     #outages = "5m:down,8m:up"
 
     [[test_network.targets]]
-    id = "tik1"
     host = "tik1.sredev.co"
 
     [[test_network.targets]]
-    id = "tik2"
     host = "tik2.sredev.co"
 
     [[test_network.targets]]
-    id = "tik3"
     host = "tik3.sredev.co"
 
 [clients]

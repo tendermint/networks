@@ -13,17 +13,7 @@ To execute the load test from a single machine:
 # Optional: deploy a clean reference network
 make deploy:001-reference
 
-# Standard load test (1000 clients, spawning 20 clients/sec, running for 60s)
-# By default, this hits the following URLs:
-# - http://tik0.sredev.co:26657
-# - http://tik1.sredev.co:26657
-# - http://tik2.sredev.co:26657
-# - http://tik3.sredev.co:26657
-# The load test is executed from the following 4 machines:
-# - tok0.sredev.co (master)
-# - tok1.sredev.co (slave)
-# - tok2.sredev.co (slave)
-# - tok3.sredev.co (slave)
+# Standard load test
 make scenario:003-kvstore-loadtest-distributed
 ```
 

@@ -1,6 +1,4 @@
-# ---------------------------
-# Installs Tendermint service
-# ---------------------------
+---
 - name: Ensure service group exists
   group:
     name: tendermint

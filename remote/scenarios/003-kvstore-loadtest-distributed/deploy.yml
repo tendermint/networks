@@ -7,115 +7,93 @@
     - tak0
   become: yes
   vars:
+    # set fast_mode to yes to speed up this Ansible playbook significantly
+    # (assuming all the relevant software's already installed)
+    fast_mode: no
     loadtest_user: "loadtest"
     loadtest_group: "loadtest"
     loadtest_home: "/home/{{ loadtest_user }}"
-    venv_dir: "{{ loadtest_home }}/venv"
     loadtest_master_node: tok0
-    loadtest_master_hostname: 172.31.6.229     # Use internal IP of host as ports are blocked externally
-    expected_slave_count: 4
-    force_update_venv: no
-    fast_mode: no
-    results_output_dir: "/tmp/003-kvstore-loadtest-distributed"
-
-    # Locust configuration parameters
-    target_hosts:
-      - "tik0.sredev.co:26657"
-      - "tik1.sredev.co:26657"
-      - "tik2.sredev.co:26657"
-      - "tik3.sredev.co:26657"
-    target_hosts_proto: http
-    target_hosts_str: "{{ target_hosts | join('::') }}"
-    csv_output_file: "{{ loadtest_home }}/loadtest"
-    num_clients: 1000
-    hatch_rate: 20
-    run_time: 5m
-    run_timeout: 330 # In seconds - must be longer than run_time.
-    log_file: "{{ loadtest_home }}/loadtest.log"
-    stdout_file: "{{ loadtest_home }}/loadtest.stdout.log"
-
-    # Outage simulation
-    outage_sim: ""
+    loadtest_master_hostaddr: 172.31.6.229 # Use internal IP of host as ports are blocked externally
+    local_results_dir: "/tmp/003-kvstore-loadtest-distributed"
+    binaries:
+      tmloadtest: "{{ lookup('env', 'GOPATH') }}/src/github.com/tendermint/networks/build/tm-load-test"
+    # master node configuration
+    master:
+      bind: "{{ loadtest_master_hostaddr }}:35000"
+      expect_slaves: 4
+      expect_slaves_within: "1m"
+      results_dir: "/tmp/003-kvstore-loadtest-distributed"
+    # slave node configuration
+    slave:
+      bind: "{{ inventory_hostname }}:35000"
+      master: "{{ loadtest_master_hostaddr }}:35000"
+    # test network configuration
+    test_network:
+      enable_prometheus: "true"
+      rpc_port: 26657
+      prometheus_port: 26660
+      prometheus_poll_interval: "10s"
+      prometheus_poll_timeout: "1s"
+      targets:
+        - { host: "tik0.sredev.co" }
+        - { host: "tik1.sredev.co" }
+        - { host: "tik2.sredev.co" }
+        - { host: "tik3.sredev.co" }
+    # client configuration
+    clients:
+      type: "tmrpc"
+      spawn: 1000
+      spawn_rate: 20
+      max_interactions: 10000
+      max_test_time: "10m"
+      request_wait_min: "1000ms"
+      request_wait_max: "1000ms"
+      request_timeout: "5s"
+      interaction_timeout: "11s"
   tasks:
-    - name: Check if Tendermint service is present
-      stat: "path=/etc/systemd/system/tendermint.service"
-      register: tm_service
+    - name: Install tm-load-test
+      include: ../../common/ansible/install-tm-load-test.yml
       when: (not fast_mode)
-    - name: Stop Tendermint if service is present
-      service: name=tendermint state=stopped
-      when: (not fast_mode) and tm_service.stat.exists
-    
-    # Check if the virtual environment exists on the target machine
-    - name: Check if the virtual environment folder exists
-      stat: "path={{ venv_dir }}"
-      register: venv
-      when: (not fast_mode)
-    - name: Configure virtual environment if not present
-      include_tasks: venv.yml
-      when: (not fast_mode) and (force_update_venv or not venv.stat.exists)
-    
-    - name: Copy the necessary scripts across
-      copy: "src={{ item }} dest={{ loadtest_home }}"
-      with_items:
-        - "locust_file_http.py"
-        - "locust_file_websockets.py"
-        - "execute_load_test.sh"
-        - "outage_sim_client.py"
-      when: (not fast_mode)
+
     - name: Configure the permissions for the loadtest user home folder
       file:
         path: "{{ loadtest_home }}"
         owner: "{{ loadtest_user }}"
         group: "{{ loadtest_group }}"
       when: (not fast_mode)
-    - name: Configure executable permissions for scripts
-      file:
-        path: "{{ loadtest_home }}/{{ item }}"
-        mode: 0755
-      with_items:
-        - execute_load_test.sh
-        - outage_sim_client.py
+
+    - name: Deploy the load test execution script
+      copy:
+        src: scripts/execute-load-test.sh
+        dest: "{{ loadtest_home }}/execute-load-test.sh"
+        owner: "{{ loadtest_user }}"
+        group: "{{ loadtest_group }}"
+        mode: "u=rwx,g=rwx,o=rx"
       when: (not fast_mode)
-    - name: Clear out existing log/statistics files, if they exist
-      file:
-        path: "{{ item }}"
-        state: absent
-      with_items:
-        - "{{ csv_output_file }}_distribution.csv"
-        - "{{ csv_output_file }}_requests.csv"
-        - "{{ log_file }}"
-        - "{{ stdout_file }}"
-    
+
+    - name: Deploy the configuration
+      template:
+        src: templates/config.toml.jinja2
+        dest: "{{ loadtest_home }}/config.toml"
+        owner: "{{ loadtest_user }}"
+        group: "{{ loadtest_group }}"
+
     - name: Execute the load test
       shell: |
         INVENTORY_HOSTNAME={{ inventory_hostname }} \
-          TARGET_HOSTS={{ target_hosts_str }} \
-          TARGET_HOSTS_PROTO={{ target_hosts_proto }} \
-          CSV_OUTPUT_FILE={{ csv_output_file }} \
-          NUM_CLIENTS={{ num_clients }} \
-          HATCH_RATE={{ hatch_rate }} \
-          RUN_TIME={{ run_time }} \
-          LOG_FILE={{ log_file }} \
-          STDOUT_FILE={{ stdout_file }} \
-          EXPECTED_SLAVE_COUNT={{ expected_slave_count }} \
-          LOADTEST_MASTER_NODE={{ loadtest_master_node }} \
-          LOADTEST_MASTER_HOSTNAME={{ loadtest_master_hostname }} \
-          OUTAGE_SIM="{{ outage_sim }}" \
-          ./execute_load_test.sh
+          MASTER_NODE={{ loadtest_master_node }} \
+          ./execute-load-test.sh > stdout.log 2>&1
       args:
         chdir: "{{ loadtest_home }}"
-      ignore_errors: yes
-      async: "{{ run_timeout }}"
-      poll: 10
+      ignore_errors: yes # We want the logs regardless of whether or not this is successful
 
-    - name: "Fetch the load test result files"
+    - name: "Fetch the load test output files"
       fetch:
         src: "{{ item }}"
-        dest: "{{ results_output_dir }}/{{ inventory_hostname }}/"
+        dest: "{{ local_results_dir }}/{{ inventory_hostname }}/"
         flat: yes
         fail_on_missing: no
       with_items:
-        - "{{ csv_output_file }}_distribution.csv"
-        - "{{ csv_output_file }}_requests.csv"
-        - "{{ log_file }}"
-        - "{{ stdout_file }}"
+        - "{{ loadtest_home }}/stdout.log"
+        - "{{ master.results_dir }}/summary.csv"

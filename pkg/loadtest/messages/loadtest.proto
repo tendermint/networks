@@ -79,17 +79,18 @@ message SummaryStats {
     int64  Count        = 1; // How many interactions/requests took place.
     int64  Errors       = 2; // The number of errors that occurred.
     int64  TotalTime    = 3; // The total time summed across all interactions/requests (nanoseconds).
-    int64  MinTime      = 4; // The minimum time for an interaction/request (nanoseconds).
-    int64  MaxTime      = 5; // The maximum time for an interaction/request (nanoseconds).
-    int64  TotalClients = 6; // For multi-client summaries, this is the number of clients responsible for the interactions/requests.
+    int64  AbsTotalTime = 4; // The absolute total time, including wait periods, across all interactions/requests (nanoseconds).
+    int64  MinTime      = 5; // The minimum time for an interaction/request (nanoseconds).
+    int64  MaxTime      = 6; // The maximum time for an interaction/request (nanoseconds).
+    int64  TotalClients = 7; // For multi-client summaries, this is the number of clients responsible for the interactions/requests.
 
     // For keeping track of the different kinds of errors that occurred, as well
     // as the number of times each error occurred.
-    map<string, int64> ErrorsByType = 7;
+    map<string, int64> ErrorsByType = 8;
 
     // Allows us to plot a summary picture of the range of response times during
     // our interactions/requests.
-    ResponseTimeHistogram ResponseTimes = 8;
+    ResponseTimeHistogram ResponseTimes = 9;
 }
 
 // ResponseTimeHistogram allows us to plot the range of different

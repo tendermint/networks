@@ -31,13 +31,17 @@ type FlattenedError struct {
 // CalculatedStats includes a number of parameters that can be calculated from a
 // `messages.SummaryStats` object.
 type CalculatedStats struct {
-	AvgTotalClientTime float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
-	CountPerClient     float64           // Number of interactions/requests per client.
-	AvgTimePerClient   float64           // Average time per interaction/request per client.
-	PerSecPerClient    float64           // Interactions/requests per second per client.
-	PerSec             float64           // Interactions/requests per second overall.
-	FailureRate        float64           // The % of interactions/requests that failed.
-	TopErrors          []*FlattenedError // The top 10 errors by error count.
+	AvgTotalClientTime    float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
+	AvgAbsTotalClientTime float64           // Average total time waiting for client's interactions/requests to complete, including wait times.
+	CountPerClient        float64           // Number of interactions/requests per client.
+	AvgTimePerClient      float64           // Average time per interaction/request per client.
+	AvgAbsTimePerClient   float64           // Average time per interaction/request per client, including wait times.
+	PerSecPerClient       float64           // Interactions/requests per second per client.
+	AbsPerSecPerClient    float64           // Interactions/requests per second per client, including wait times.
+	PerSec                float64           // Interactions/requests per second overall.
+	AbsPerSec             float64           // Interactions/requests per second overall, including wait times.
+	FailureRate           float64           // The % of interactions/requests that failed.
+	TopErrors             []*FlattenedError // The top 10 errors by error count.
 }
 
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
@@ -50,8 +54,9 @@ func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.Summar
 }
 
 // AddStatistic adds a single statistic to the given SummaryStats object.
-func AddStatistic(stats *messages.SummaryStats, timeTaken time.Duration, err error) {
+func AddStatistic(stats *messages.SummaryStats, timeTaken, absTimeTaken time.Duration, err error) {
 	timeTakenNs := int64(timeTaken) / int64(time.Nanosecond)
+	absTimeTakenNs := int64(absTimeTaken) / int64(time.Nanosecond)
 	// we cap the time taken at the response timeout
 	if timeTakenNs > stats.ResponseTimes.Timeout {
 		timeTakenNs = stats.ResponseTimes.Timeout
@@ -71,6 +76,7 @@ func AddStatistic(stats *messages.SummaryStats, timeTaken time.Duration, err err
 
 	stats.Count++
 	stats.TotalTime += timeTakenNs
+	stats.AbsTotalTime += absTimeTakenNs
 
 	if err != nil {
 		stats.Errors++
@@ -99,6 +105,7 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 	dest.Count += src.Count
 	dest.Errors += src.Errors
 	dest.TotalTime += src.TotalTime
+	dest.AbsTotalTime += src.AbsTotalTime
 	dest.TotalClients += src.TotalClients
 
 	if src.MinTime < dest.MinTime {
@@ -149,28 +156,38 @@ func FlattenedSortedErrors(stats *messages.SummaryStats) []*FlattenedError {
 func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
 	// average total time for all cumulative interactions/requests per client
 	avgTotalClientTime := math.Round(float64(stats.TotalTime) / float64(stats.TotalClients))
+	avgAbsTotalClientTime := math.Round(float64(stats.AbsTotalTime) / float64(stats.TotalClients))
 	// number of interactions/requests per client
 	countPerClient := math.Round(float64(stats.Count) / float64(stats.TotalClients))
 	// average time per interaction/request per client
 	avgTimePerClient := float64(0)
+	avgAbsTimePerClient := float64(0)
 	if countPerClient > 0 {
 		avgTimePerClient = avgTotalClientTime / countPerClient
+		avgAbsTimePerClient = avgAbsTotalClientTime / countPerClient
 	}
 	// interactions/requests per second per client
 	perSecPerClient := float64(0)
+	absPerSecPerClient := float64(0)
 	if avgTotalClientTime > 0 {
 		perSecPerClient = 1 / (avgTimePerClient / float64(time.Second))
+		absPerSecPerClient = 1 / (avgAbsTimePerClient / float64(time.Second))
 	}
 	// interactions/requests per second overall
 	perSec := perSecPerClient * float64(stats.TotalClients)
+	absPerSec := absPerSecPerClient * float64(stats.TotalClients)
 	return &CalculatedStats{
-		AvgTotalClientTime: avgTotalClientTime,
-		CountPerClient:     countPerClient,
-		AvgTimePerClient:   avgTimePerClient,
-		PerSecPerClient:    perSecPerClient,
-		PerSec:             perSec,
-		FailureRate:        float64(100) * (float64(stats.Errors) / float64(stats.Count)),
-		TopErrors:          FlattenedSortedErrors(stats),
+		AvgTotalClientTime:    avgTotalClientTime,
+		AvgAbsTotalClientTime: avgAbsTotalClientTime,
+		CountPerClient:        countPerClient,
+		AvgTimePerClient:      avgTimePerClient,
+		AvgAbsTimePerClient:   avgAbsTimePerClient,
+		PerSecPerClient:       perSecPerClient,
+		AbsPerSecPerClient:    absPerSecPerClient,
+		PerSec:                perSec,
+		AbsPerSec:             absPerSec,
+		FailureRate:           float64(100) * (float64(stats.Errors) / float64(stats.Count)),
+		TopErrors:             FlattenedSortedErrors(stats),
 	}
 }
 
@@ -182,7 +199,9 @@ func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.Su
 
 	logger.Info(logPrefix+" total clients", "value", stats.TotalClients)
 	logger.Info(logPrefix+" per second per client", "value", fmt.Sprintf("%.2f", cs.PerSecPerClient))
+	logger.Info(logPrefix+" per second per client (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient))
 	logger.Info(logPrefix+" per second overall", "value", fmt.Sprintf("%.2f", cs.PerSec))
+	logger.Info(logPrefix+" per second overall (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSec))
 	logger.Info(logPrefix+" count", "value", stats.Count)
 	logger.Info(logPrefix+" errors", "value", stats.Errors)
 	logger.Info(logPrefix+" failure rate (%)", "value", fmt.Sprintf("%.2f", cs.FailureRate))
@@ -239,7 +258,13 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	if err := writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)}); err != nil {
 		return err
 	}
+	if err := writer.Write([]string{prefix + " per second per client (absolute)", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient)}); err != nil {
+		return err
+	}
 	if err := writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " per second overall (absolute)", fmt.Sprintf("%.2f", cs.AbsPerSec)}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " count", fmt.Sprintf("%d", stats.Count)}); err != nil {

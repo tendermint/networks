@@ -163,13 +163,13 @@ func (s *SlaveConfig) Validate() error {
 
 func (c *TestNetworkConfig) Validate() error {
 	if c.PrometheusPort < 1 {
-		return NewError(ErrInvalidConfig, nil, "test network prometheus port is invalid")
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network prometheus port is invalid: %d", c.PrometheusPort))
 	}
 	if c.RPCPort < 1 {
-		return NewError(ErrInvalidConfig, nil, "test network RPC port is invalid")
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network RPC port is invalid: %d", c.RPCPort))
 	}
 	if len(c.Targets) == 0 {
-		return NewError(ErrInvalidConfig, nil, "test network must have at least one target")
+		return NewError(ErrInvalidConfig, nil, "test network must have at least one target (found 0)")
 	}
 	for i, target := range c.Targets {
 		if err := target.Validate(i); err != nil {
