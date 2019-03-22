@@ -22,7 +22,7 @@ bind = "0.0.0.0:"
 # we still need an external address through which to access the master).
 master = "127.0.0.1:35000"
 
-[test-network]
+[test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = true
 
@@ -36,9 +36,7 @@ prometheus_poll_interval = "10s"
 # At what point do we consider a Prometheus polling operation a failure?
 prometheus_poll_timeout = "1s"
 
-    [[test-network.targets]]
-    # A short, descriptive identifier for this host
-    id = "tm1"
+    [[test_network.targets]]
     host = "192.168.2.1"
 
     # To override the default RPC/Prometheus ports
@@ -50,12 +48,10 @@ prometheus_poll_timeout = "1s"
     # minutes.
     #outages = "5m:down,8m:up"
 
-    [[test-network.targets]]
-    id = "tm2"
+    [[test_network.targets]]
     host = "192.168.2.2"
 
-    [[test-network.targets]]
-    id = "tm3"
+    [[test_network.targets]]
     host = "192.168.2.3"
 
 [clients]
