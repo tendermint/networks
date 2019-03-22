@@ -52,14 +52,6 @@
       request_timeout: "5s"
       interaction_timeout: "11s"
   tasks:
-    - name: Check if Tendermint service is present on load testing nodes
-      stat: path=/etc/systemd/system/tendermint.service
-      register: tm_service
-      when: (not fast_mode)
-    - name: Stop Tendermint on load testing nodes
-      service: name=tendermint state=stopped
-      when: (not fast_mode) and tm_service.stat.exists
-
     - name: Install tm-load-test
       include: ../../common/ansible/install-tm-load-test.yml
       when: (not fast_mode)

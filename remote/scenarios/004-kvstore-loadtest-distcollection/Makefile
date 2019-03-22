@@ -1,49 +1,63 @@
 INVENTORY?=../../inventory/hosts
+
+# Which test network should be deployed, if this script deploys one
+# automatically?
 TEST_NETWORK?=001-reference
-REDEPLOY_BETWEEN_TESTS?=true
-START_NUM_CLIENTS?=100
-END_NUM_CLIENTS?=1000
-INC_NUM_CLIENTS?=100
-START_HATCH_RATE?=10
-END_HATCH_RATE?=100
-INC_HATCH_RATE?=10
-RUN_TIME?=60s
-RUN_TIMEOUT?=70
+
+# Should the test network be redeployed before each test?
+DEPLOY_NETWORK_BEFORE_TEST?=yes
+
+# Should each load test be executed in fast mode?
 FAST_MODE?=false
-RESULTS_OUTPUT_DIR?=/tmp/004-kvstore-loadtest-distcollection
-LOADTEST_LOG?=$(RESULTS_OUTPUT_DIR)/collection.log
-PLOT_RESULTS_DIR?=$(RESULTS_OUTPUT_DIR)/plots
-.PHONY: execute plot-results
+
+# The number of load tests to execute
+TEST_COUNT?=10
+
+# Which load testing client to use
+CLIENTS_TYPE?=tmrpc
+
+# Number of clients to spawn
+CLIENTS_SPAWN_START?=100
+CLIENTS_SPAWN_END?=1000
+
+# The rate at which to spawn clients on each slave node
+CLIENTS_SPAWN_RATE_START?=10
+CLIENTS_SPAWN_RATE_END?=100
+
+# The maximum number of interactions per client before considering a load test
+# to have completed
+CLIENTS_MAX_INTERACTIONS?=100
+
+# Request wait minimum times (in milliseconds)
+CLIENTS_REQUEST_WAIT_MIN_START?=1000
+CLIENTS_REQUEST_WAIT_MIN_END?=1000
+
+# Request wait maximum times (in milliseconds)
+CLIENTS_REQUEST_WAIT_MAX_START?=1000
+CLIENTS_REQUEST_WAIT_MAX_END?=1000
+
+# Where do we store the results we fetch from the load test servers?
+LOCAL_RESULTS_DIR?=/tmp/004-kvstore-loadtest-distcollection
+# Where do we store the load test collection executor logs?
+LOADTEST_LOG?=$(LOCAL_RESULTS_DIR)/collection.log
+.PHONY: execute
 
 execute:
-	mkdir -p $(RESULTS_OUTPUT_DIR)
 	INVENTORY=$(INVENTORY) \
 		TEST_NETWORK=$(TEST_NETWORK) \
-		REDEPLOY_BETWEEN_TESTS=$(REDEPLOY_BETWEEN_TESTS) \
-		START_NUM_CLIENTS=$(START_NUM_CLIENTS) \
-		END_NUM_CLIENTS=$(END_NUM_CLIENTS) \
-		INC_NUM_CLIENTS=$(INC_NUM_CLIENTS) \
-		START_HATCH_RATE=$(START_HATCH_RATE) \
-		END_HATCH_RATE=$(END_HATCH_RATE) \
-		INC_HATCH_RATE=$(INC_HATCH_RATE) \
-		RUN_TIME=$(RUN_TIME) \
-		RUN_TIMEOUT=$(RUN_TIMEOUT) \
+		DEPLOY_NETWORK_BEFORE_TEST=$(DEPLOY_NETWORK_BEFORE_TEST) \
 		FAST_MODE=$(FAST_MODE) \
-		RESULTS_OUTPUT_DIR=$(RESULTS_OUTPUT_DIR) \
+		TEST_COUNT=$(TEST_COUNT) \
+		CLIENTS_TYPE=$(CLIENTS_TYPE) \
+		CLIENTS_SPAWN_START=$(CLIENTS_SPAWN_START) \
+		CLIENTS_SPAWN_END=$(CLIENTS_SPAWN_END) \
+		CLIENTS_SPAWN_RATE_START=$(CLIENTS_SPAWN_RATE_START) \
+		CLIENTS_SPAWN_RATE_END=$(CLIENTS_SPAWN_RATE_END) \
+		CLIENTS_MAX_INTERACTIONS=$(CLIENTS_MAX_INTERACTIONS) \
+		CLIENTS_REQUEST_WAIT_MIN_START=$(CLIENTS_REQUEST_WAIT_MIN_START) \
+		CLIENTS_REQUEST_WAIT_MIN_END=$(CLIENTS_REQUEST_WAIT_MIN_END) \
+		CLIENTS_REQUEST_WAIT_MAX_START=$(CLIENTS_REQUEST_WAIT_MAX_START) \
+		CLIENTS_REQUEST_WAIT_MAX_END=$(CLIENTS_REQUEST_WAIT_MAX_END) \
+		LOCAL_RESULTS_DIR=$(LOCAL_RESULTS_DIR) \
 		LOADTEST_LOG=$(LOADTEST_LOG) \
-		./execute_load_test_collection.sh
-
-plot-results:
-	mkdir -p $(PLOT_RESULTS_DIR)
-	TEST_NETWORK=$(TEST_NETWORK) \
-		REDEPLOY_BETWEEN_TESTS=$(REDEPLOY_BETWEEN_TESTS) \
-		START_NUM_CLIENTS=$(START_NUM_CLIENTS) \
-		END_NUM_CLIENTS=$(END_NUM_CLIENTS) \
-		INC_NUM_CLIENTS=$(INC_NUM_CLIENTS) \
-		START_HATCH_RATE=$(START_HATCH_RATE) \
-		END_HATCH_RATE=$(END_HATCH_RATE) \
-		INC_HATCH_RATE=$(INC_HATCH_RATE) \
-		RUN_TIME=$(RUN_TIME) \
-		RESULTS_OUTPUT_DIR=$(RESULTS_OUTPUT_DIR) \
-		PLOT_RESULTS_DIR=$(PLOT_RESULTS_DIR) \
-		./plot_results.py
+		./scripts/execute.sh

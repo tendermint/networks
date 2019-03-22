@@ -27,7 +27,9 @@ LOCAL_RESULTS_DIR?=/tmp/003-kvstore-loadtest-distributed
 .PHONY: execute
 
 execute:
-	if [ "${FAST_MODE}" == "false" ]; then $(MAKE) -C $(TMLOADTEST_PATH) build-tm-load-test-linux; fi
+	if [ "${FAST_MODE}" == "false" ]; then \
+		$(MAKE) -C $(TMLOADTEST_PATH) build-tm-load-test-linux; \
+	fi
 	mkdir -p $(LOCAL_RESULTS_DIR)
 	rm -rf $(LOCAL_RESULTS_DIR)/*
 	ansible-playbook -i $(INVENTORY) \
