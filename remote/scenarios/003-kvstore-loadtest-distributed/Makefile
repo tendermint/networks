@@ -1,31 +1,38 @@
+GOPATH?=$(shell go env GOPATH)
 INVENTORY?=../../inventory/hosts
-TARGET_HOSTS_PROTO?=http
-NUM_CLIENTS?=1000
-HATCH_RATE?=20
-RUN_TIME?=60s
-RUN_TIMEOUT?=70
 FAST_MODE?=false
-RESULTS_OUTPUT_DIR?=/tmp/003-kvstore-loadtest-distributed
-.PHONY: execute fetch-results
+TMLOADTEST_PATH?=$(GOPATH)/src/github.com/tendermint/networks
+TMLOADTEST_BINARY?=$(TMLOADTEST_PATH)/build/tm-load-test
+CLIENTS_TYPE?=tmrpc
+CLIENTS_SPAWN?=1000
+CLIENTS_SPAWN_RATE?=20.0
+CLIENTS_MAX_INTERACTIONS?=10000
+CLIENTS_MAX_TEST_TIME?=10m
+CLIENTS_REQUEST_WAIT_MIN?=1000ms
+CLIENTS_REQUEST_WAIT_MAX?=1000ms
+CLIENTS_REQUEST_TIMEOUT?=5s
+CLIENTS_INTERACTION_TIMEOUT?=14s
+CLIENTS_CONFIG?="{\"clients\":{\
+\"type\": \"${CLIENTS_TYPE}\",\
+\"spawn\": ${CLIENTS_SPAWN},\
+\"spawn_rate\": ${CLIENTS_SPAWN_RATE},\
+\"max_interactions\": ${CLIENTS_MAX_INTERACTIONS},\
+\"max_test_time\": \"${CLIENTS_MAX_TEST_TIME}\",\
+\"request_wait_min\": \"${CLIENTS_REQUEST_WAIT_MIN}\",\
+\"request_wait_max\": \"${CLIENTS_REQUEST_WAIT_MAX}\",\
+\"request_timeout\": \"${CLIENTS_REQUEST_TIMEOUT}\",\
+\"interaction_timeout\": \"${CLIENTS_INTERACTION_TIMEOUT}\",\
+}}"
+LOCAL_RESULTS_DIR?=/tmp/003-kvstore-loadtest-distributed
+.PHONY: execute
 
 execute:
-	mkdir -p $(RESULTS_OUTPUT_DIR)
-	rm -rf $(RESULTS_OUTPUT_DIR)/*
+	if [ "${FAST_MODE}" == "false" ]; then $(MAKE) -C $(TMLOADTEST_PATH) build-tm-load-test-linux; fi
+	mkdir -p $(LOCAL_RESULTS_DIR)
+	rm -rf $(LOCAL_RESULTS_DIR)/*
 	ansible-playbook -i $(INVENTORY) \
-		-e "{\"target_hosts_proto\":\"${TARGET_HOSTS_PROTO}\"}" \
-		-e "{\"num_clients\":${NUM_CLIENTS}}" \
-		-e "{\"hatch_rate\":${HATCH_RATE}}" \
-		-e "{\"run_time\":${RUN_TIME}}" \
-		-e "{\"run_timeout\":${RUN_TIMEOUT}}" \
-		-e "{\"fast_mode\":${FAST_MODE}}" \
-		-e "{\"results_output_dir\":\"${RESULTS_OUTPUT_DIR}\"}" \
-		-e "{\"outage_sim\":\"${OUTAGE_SIM}\"}" \
+		-e "{\"local_results_dir\":\"${LOCAL_RESULTS_DIR}\"}" \
+		-e "{\"fast_mode\": ${FAST_MODE}}" \
+		-e "{\"binaries\": {\"tmloadtest\": \"${TMLOADTEST_BINARY}\"}}" \
+		-e $(CLIENTS_CONFIG) \
 		deploy.yml
-
-# Command to help to just fetch the logs again
-fetch-results:
-	mkdir -p $(RESULTS_OUTPUT_DIR)
-	rm -rf $(RESULTS_OUTPUT_DIR)/*
-	ansible-playbook -i $(INVENTORY) \
-		-e "{\"results_output_dir\":\"${RESULTS_OUTPUT_DIR}\"}" \
-		fetch-logs.yml
