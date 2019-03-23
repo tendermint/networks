@@ -98,6 +98,7 @@ while [ ${cur_test} -lt ${TEST_COUNT} ]; do
     # TODO: Fix this in the deploy.yml script
     INVENTORY=${INVENTORY} \
         FAST_MODE=${FAST_MODE} \
+        DEBUG_MODE=${DEBUG_MODE} \
         CLIENTS_TYPE=${CLIENTS_TYPE} \
         CLIENTS_SPAWN=${clients_spawn} \
         CLIENTS_SPAWN_RATE="${clients_spawn_rate}.0" \

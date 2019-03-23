@@ -11,6 +11,7 @@
     # (assuming all the relevant software's already installed)
     fast_mode: no
     fetch_results_only: no
+    debug_mode: no
     loadtest_user: "loadtest"
     loadtest_group: "loadtest"
     loadtest_home: "/home/{{ loadtest_user }}"
@@ -85,6 +86,7 @@
       shell: |
         INVENTORY_HOSTNAME={{ inventory_hostname }} \
           MASTER_NODE={{ loadtest_master_node }} \
+          DEBUG_MODE={{ debug_mode }} \
           ./execute-load-test.sh > stdout.log 2>&1
       args:
         chdir: "{{ loadtest_home }}"

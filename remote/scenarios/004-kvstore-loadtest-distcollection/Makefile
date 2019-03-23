@@ -10,6 +10,9 @@ DEPLOY_NETWORK_BEFORE_TEST?=yes
 # Should each load test be executed in fast mode?
 FAST_MODE?=false
 
+# Should output logging happen at DEBUG-level?
+DEBUG_MODE?=false
+
 # The number of load tests to execute
 TEST_COUNT?=10
 
@@ -47,6 +50,7 @@ execute:
 		TEST_NETWORK=$(TEST_NETWORK) \
 		DEPLOY_NETWORK_BEFORE_TEST=$(DEPLOY_NETWORK_BEFORE_TEST) \
 		FAST_MODE=$(FAST_MODE) \
+		DEBUG_MODE=$(DEBUG_MODE) \
 		TEST_COUNT=$(TEST_COUNT) \
 		CLIENTS_TYPE=$(CLIENTS_TYPE) \
 		CLIENTS_SPAWN_START=$(CLIENTS_SPAWN_START) \
