@@ -51,6 +51,7 @@ type CalculatedStats struct {
 // PrometheusStats encapsulates all of the statistics we retrieved from the
 // Prometheus endpoints for our target nodes.
 type PrometheusStats struct {
+	StartTime       time.Time                         // When was the load test started?
 	TargetNodeStats map[string][]*NodePrometheusStats // Target node stats organized by hostname.
 }
 
@@ -433,6 +434,7 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 	tickers := make([]*time.Ticker, 0)
 	collectorsShutdownc := make([]chan bool, 0)
 	logger.Debug("Starting up Prometheus collectors", "count", len(cfg.TestNetwork.Targets))
+	ps.StartTime = time.Now()
 	wg := &sync.WaitGroup{}
 	for _, node := range cfg.TestNetwork.Targets {
 		c := &http.Client{
@@ -502,7 +504,7 @@ collectorsLoop:
 	donec <- true
 }
 
-func writeTimeSeriesTargetNodeStats(w io.Writer, nodeStats []*NodePrometheusStats) error {
+func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats []*NodePrometheusStats) error {
 	// first extract a sorted list of the metric families for this node
 	familyNames := make(map[string]interface{})
 	timestamps := make([]string, 0)
@@ -535,7 +537,7 @@ func writeTimeSeriesTargetNodeStats(w io.Writer, nodeStats []*NodePrometheusStat
 			}
 		}
 		if added > 0 {
-			timestamps = append(timestamps, sample.Timestamp.Format("0102-15:04:05"))
+			timestamps = append(timestamps, fmt.Sprintf("%.2f", sample.Timestamp.Sub(startTime).Seconds()))
 		}
 	}
 	familyNamesSorted := make([]string, 0)
@@ -579,7 +581,7 @@ func (ps *PrometheusStats) Dump(outputPath string) error {
 			return err
 		}
 		defer f.Close()
-		if err := writeTimeSeriesTargetNodeStats(f, nodeStats); err != nil {
+		if err := writeTimeSeriesTargetNodeStats(f, ps.StartTime, nodeStats); err != nil {
 			return err
 		}
 	}
