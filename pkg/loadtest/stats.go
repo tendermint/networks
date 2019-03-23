@@ -428,7 +428,6 @@ func collectPrometheusStats(c *http.Client, hostID, nodeURL string, statsc chan 
 // RunCollectors will kick off one goroutine per Tendermint node from which
 // we're collecting Prometheus stats.
 func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool, logger logging.Logger) {
-	clients := make([]*http.Client, 0)
 	statsc := make(chan nodePrometheusStats, len(cfg.TestNetwork.Targets))
 	tickers := make([]*time.Ticker, 0)
 	collectorsShutdownc := make([]chan bool, 0)
@@ -438,7 +437,6 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 		c := &http.Client{
 			Timeout: time.Duration(cfg.TestNetwork.PrometheusPollTimeout),
 		}
-		clients = append(clients, c)
 		ticker := time.NewTicker(time.Duration(cfg.TestNetwork.PrometheusPollInterval))
 		tickers = append(tickers, ticker)
 		collectorShutdownc := make(chan bool, 1)
