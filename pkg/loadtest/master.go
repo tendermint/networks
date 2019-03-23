@@ -197,7 +197,7 @@ func (m *Master) stopPrometheusCollectors() {
 	select {
 	case <-m.statsDonec:
 		m.logger.Debug("Prometheus collectors successfully shut down")
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		m.logger.Error("Timed out waiting for Prometheus collectors to shut down")
 	}
 }

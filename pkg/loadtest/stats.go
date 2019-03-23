@@ -428,6 +428,7 @@ func collectPrometheusStats(c *http.Client, hostID, nodeURL string, statsc chan 
 // RunCollectors will kick off one goroutine per Tendermint node from which
 // we're collecting Prometheus stats.
 func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool, logger logging.Logger) {
+	clients := make([]*http.Client, 0)
 	statsc := make(chan nodePrometheusStats, len(cfg.TestNetwork.Targets))
 	tickers := make([]*time.Ticker, 0)
 	collectorsShutdownc := make([]chan bool, 0)
@@ -437,6 +438,7 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 		c := &http.Client{
 			Timeout: time.Duration(cfg.TestNetwork.PrometheusPollTimeout),
 		}
+		clients = append(clients, c)
 		ticker := time.NewTicker(time.Duration(cfg.TestNetwork.PrometheusPollInterval))
 		tickers = append(tickers, ticker)
 		collectorShutdownc := make(chan bool, 1)
@@ -481,6 +483,20 @@ collectorsLoop:
 	}
 	// wait for all of the collector loops to shut down
 	wg.Wait()
+
+	logger.Info("Waiting 10 seconds for network to settle post-test...")
+	time.Sleep(10 * time.Second)
+
+	logger.Debug("Doing one final Prometheus stats collection from each node")
+	// do one final collection from each node
+	for i, node := range cfg.TestNetwork.Targets {
+		nodeStats, err := GetNodePrometheusStats(clients[i], node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort))
+		if err != nil {
+			logger.Error("Failed to fetch Prometheus statistics", "hostID", node.ID, "err", err)
+		} else {
+			ps.TargetNodeStats[node.ID] = append(ps.TargetNodeStats[node.ID], nodeStats)
+		}
+	}
 
 	logger.Debug("Prometheus collector loop shut down")
 	donec <- true
