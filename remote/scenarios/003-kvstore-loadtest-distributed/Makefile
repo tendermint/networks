@@ -1,6 +1,7 @@
 GOPATH?=$(shell go env GOPATH)
 INVENTORY?=../../inventory/hosts
 FAST_MODE?=false
+DEBUG_MODE?=false
 FETCH_RESULTS_ONLY?=false
 TMLOADTEST_PATH?=$(GOPATH)/src/github.com/tendermint/networks
 TMLOADTEST_BINARY?=$(TMLOADTEST_PATH)/build/tm-load-test
@@ -36,6 +37,7 @@ execute:
 	ansible-playbook -i $(INVENTORY) \
 		-e "{\"local_results_dir\":\"${LOCAL_RESULTS_DIR}\"}" \
 		-e "{\"fast_mode\": ${FAST_MODE}}" \
+		-e "{\"debug_mode\": ${DEBUG_MODE}}" \
 		-e "{\"fetch_results_only\": ${FETCH_RESULTS_ONLY}}" \
 		-e "{\"binaries\": {\"tmloadtest\": \"${TMLOADTEST_BINARY}\"}}" \
 		-e $(CLIENTS_CONFIG) \

@@ -2,7 +2,7 @@
 set -e
 
 VERBOSE=""
-if [ "${DEBUG_MODE}" == true ]; then
+if [ "${DEBUG_MODE}" == "true" ]; then
     VERBOSE="-v"
 fi
 
