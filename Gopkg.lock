@@ -497,6 +497,8 @@
     "github.com/BurntSushi/toml",
     "github.com/gogo/protobuf/proto",
     "github.com/gogo/protobuf/sortkeys",
+    "github.com/prometheus/client_model/go",
+    "github.com/prometheus/common/expfmt",
     "github.com/satori/go.uuid",
     "github.com/sirupsen/logrus",
     "github.com/tendermint/tendermint/libs/common",

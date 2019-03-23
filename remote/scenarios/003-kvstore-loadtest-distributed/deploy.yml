@@ -10,6 +10,7 @@
     # set fast_mode to yes to speed up this Ansible playbook significantly
     # (assuming all the relevant software's already installed)
     fast_mode: no
+    fetch_results_only: no
     loadtest_user: "loadtest"
     loadtest_group: "loadtest"
     loadtest_home: "/home/{{ loadtest_user }}"
@@ -36,10 +37,10 @@
       prometheus_poll_interval: "10s"
       prometheus_poll_timeout: "1s"
       targets:
-        - { host: "tik0.sredev.co" }
-        - { host: "tik1.sredev.co" }
-        - { host: "tik2.sredev.co" }
-        - { host: "tik3.sredev.co" }
+        - { id: "tik0", host: "tik0.sredev.co", prometheus_host: "172.31.7.28" }
+        - { id: "tik1", host: "tik1.sredev.co", prometheus_host: "172.31.1.213" }
+        - { id: "tik2", host: "tik2.sredev.co", prometheus_host: "172.31.6.31" }
+        - { id: "tik3", host: "tik3.sredev.co", prometheus_host: "172.31.15.61" }
     # client configuration
     clients:
       type: "tmrpc"
@@ -54,14 +55,14 @@
   tasks:
     - name: Install tm-load-test
       include: ../../common/ansible/install-tm-load-test.yml
-      when: (not fast_mode)
+      when: (not fast_mode) and (not fetch_results_only)
 
     - name: Configure the permissions for the loadtest user home folder
       file:
         path: "{{ loadtest_home }}"
         owner: "{{ loadtest_user }}"
         group: "{{ loadtest_group }}"
-      when: (not fast_mode)
+      when: (not fast_mode) and (not fetch_results_only)
 
     - name: Deploy the load test execution script
       copy:
@@ -70,7 +71,7 @@
         owner: "{{ loadtest_user }}"
         group: "{{ loadtest_group }}"
         mode: "u=rwx,g=rwx,o=rx"
-      when: (not fast_mode)
+      when: (not fast_mode) and (not fetch_results_only)
 
     - name: Deploy the configuration
       template:
@@ -78,6 +79,7 @@
         dest: "{{ loadtest_home }}/config.toml"
         owner: "{{ loadtest_user }}"
         group: "{{ loadtest_group }}"
+      when: (not fetch_results_only)
 
     - name: Execute the load test
       shell: |
@@ -87,8 +89,9 @@
       args:
         chdir: "{{ loadtest_home }}"
       ignore_errors: yes # We want the logs regardless of whether or not this is successful
+      when: (not fetch_results_only)
 
-    - name: "Fetch the load test output files"
+    - name: Fetch the load test log files
       fetch:
         src: "{{ item }}"
         dest: "{{ local_results_dir }}/{{ inventory_hostname }}/"
@@ -96,4 +99,12 @@
         fail_on_missing: no
       with_items:
         - "{{ loadtest_home }}/stdout.log"
-        - "{{ master.results_dir }}/summary.csv"
+
+    - name: Fetch load test statistics
+      fetch:
+        src: "{{ master.results_dir }}/{{ item.id }}.csv"
+        dest: "{{ local_results_dir }}/{{ inventory_hostname }}/"
+        flat: yes
+        fail_on_missing: no
+      with_items: "{{ test_network.targets }}"
+      when: inventory_hostname == loadtest_master_node

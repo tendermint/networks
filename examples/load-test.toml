@@ -37,6 +37,7 @@ prometheus_poll_interval = "10s"
 prometheus_poll_timeout = "1s"
 
     [[test_network.targets]]
+    id = "host1"
     host = "192.168.2.1"
 
     # To override the default RPC/Prometheus ports
@@ -49,9 +50,11 @@ prometheus_poll_timeout = "1s"
     #outages = "5m:down,8m:up"
 
     [[test_network.targets]]
+    id = "host2"
     host = "192.168.2.2"
 
     [[test_network.targets]]
+    id = "host3"
     host = "192.168.2.3"
 
 [clients]

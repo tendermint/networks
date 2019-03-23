@@ -20,8 +20,12 @@ type Master struct {
 	logger logging.Logger
 
 	slaves *actor.PIDSet
-	stats  *messages.CombinedStats
+	istats *messages.CombinedStats // Interaction/request-derived statistics
+	pstats *PrometheusStats        // Stats from Prometheus endpoints
 	mtx    *sync.Mutex
+
+	statsShutdownc chan bool
+	statsDonec     chan bool
 }
 
 // Master implements actor.Actor
@@ -40,14 +44,19 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 			probe:  probe,
 			logger: logging.NewLogrusLogger("master"),
 			slaves: actor.NewPIDSet(),
-			stats: clientFactory.NewStats(ClientParams{
+			istats: clientFactory.NewStats(ClientParams{
 				TargetNodes:        cfg.TestNetwork.GetTargetRPCURLs(),
 				InteractionTimeout: time.Duration(cfg.Clients.InteractionTimeout),
 				RequestTimeout:     time.Duration(cfg.Clients.RequestTimeout),
 				RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
 				RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
 			}),
-			mtx: &sync.Mutex{},
+			pstats: &PrometheusStats{
+				TargetNodeStats: make(map[string][]*NodePrometheusStats),
+			},
+			mtx:            &sync.Mutex{},
+			statsShutdownc: make(chan bool, 1),
+			statsDonec:     make(chan bool, 1),
 		}
 	})
 	pid, err := ctx.SpawnNamed(props, "master")
@@ -89,6 +98,10 @@ func (m *Master) onStartup(ctx actor.Context) {
 		time.Sleep(time.Duration(m.cfg.Master.ExpectSlavesWithin))
 		ctx_.Send(ctx_.Self(), &messages.CheckAllSlavesConnected{})
 	}(ctx)
+	// fire up our Prometheus collector routine
+	go func() {
+		m.pstats.RunCollectors(m.cfg, m.statsShutdownc, m.statsDonec, m.logger)
+	}()
 	if m.probe != nil {
 		m.probe.OnStartup(ctx)
 	}
@@ -179,7 +192,18 @@ func (m *Master) kill(ctx actor.Context) {
 	m.shutdown(ctx, NewError(ErrKilled, nil))
 }
 
+func (m *Master) stopPrometheusCollectors() {
+	m.statsShutdownc <- true
+	select {
+	case <-m.statsDonec:
+		m.logger.Debug("Prometheus collectors successfully shut down")
+	case <-time.After(10 * time.Second):
+		m.logger.Error("Timed out waiting for Prometheus collectors to shut down")
+	}
+}
+
 func (m *Master) shutdown(ctx actor.Context, err error) {
+	m.stopPrometheusCollectors()
 	m.writeStats()
 	if err != nil {
 		m.logger.Error("Shutting down master node", "err", err)
@@ -194,16 +218,19 @@ func (m *Master) shutdown(ctx actor.Context, err error) {
 
 func (m *Master) updateStats(stats *messages.CombinedStats) {
 	m.mtx.Lock()
-	MergeCombinedStats(m.stats, stats)
+	MergeCombinedStats(m.istats, stats)
 	m.mtx.Unlock()
 }
 
 func (m *Master) writeStats() {
 	m.mtx.Lock()
-	LogStats(logging.NewLogrusLogger(""), m.stats)
+	LogStats(logging.NewLogrusLogger(""), m.istats)
 	filename := path.Join(m.cfg.Master.ResultsDir, "summary.csv")
-	if err := WriteCombinedStatsToFile(filename, m.stats); err != nil {
+	if err := WriteCombinedStatsToFile(filename, m.istats); err != nil {
 		m.logger.Error("Failed to write final statistics to output CSV file", "filename", filename)
+	}
+	if err := m.pstats.Dump(m.cfg.Master.ResultsDir); err != nil {
+		m.logger.Error("Failed to write Prometheus stats to output directory", "err", err)
 	}
 	m.mtx.Unlock()
 }
