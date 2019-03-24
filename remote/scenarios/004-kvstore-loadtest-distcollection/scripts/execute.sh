@@ -23,9 +23,11 @@ mkdir -p $(dirname ${LOADTEST_LOG})
 cat /dev/null > ${LOADTEST_LOG}
 
 function loadtest_log {
-    echo "\n---------------------------------------------------------------------"
+    echo ""
+    echo "---------------------------------------------------------------------"
     echo "$1"
-    echo "---------------------------------------------------------------------\n"
+    echo "---------------------------------------------------------------------"
+    echo ""
     echo "$1" >> ${LOADTEST_LOG}
 }
 
@@ -83,7 +85,7 @@ cur_test=0
 
 while [ ${cur_test} -lt ${TEST_COUNT} ]; do
     CUR_TEST_PARAMS="$(cur_test_params ${cur_test} ${clients_spawn} ${clients_spawn_rate} ${clients_request_wait_min} ${clients_request_wait_max})"
-    loadtest_log "LOAD TEST ${cur_test}\n${CUR_TEST_PARAMS}"
+    loadtest_log "${CUR_TEST_PARAMS}"
     TEST_OUTPUT_DIR=${LOCAL_RESULTS_DIR}/test${cur_test}
 
     if [ "${DEPLOY_NETWORK_BEFORE_TEST}" == "yes" ]; then
