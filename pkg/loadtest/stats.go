@@ -506,38 +506,33 @@ collectorsLoop:
 
 func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats []*NodePrometheusStats) error {
 	// first extract a sorted list of the metric families for this node
-	familyNames := make(map[string]interface{})
+	familyNames := make(map[string]string)
 	timestamps := make([]string, 0)
-	familySamples := make(map[string][]string)
+	// family name -> timestamp string -> formatted floating point value string
+	familySamples := make(map[string]map[string]string)
 	for _, sample := range nodeStats {
 		added := 0
-		for _, mf := range sample.MetricFamilies {
-			fn := ""
+		timestamp := fmt.Sprintf("%.2f", sample.Timestamp.Sub(startTime).Seconds())
+
+		for name, mf := range sample.MetricFamilies {
+			if _, ok := familySamples[name]; !ok {
+				familySamples[name] = make(map[string]string)
+			}
 			// we only want counters and gauges right now
 			switch *mf.Type {
 			case pdto.MetricType_COUNTER:
-				if len(*mf.Help) > 0 {
-					fn = *mf.Help
-				} else {
-					fn = *mf.Name
-				}
-				familyNames[fn] = nil
-				familySamples[fn] = append(familySamples[fn], fmt.Sprintf("%.4f", *(mf.Metric[0].Counter.Value)))
+				familyNames[name] = *mf.Help
+				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Counter.Value))
 				added++
 
 			case pdto.MetricType_GAUGE:
-				if len(*mf.Help) > 0 {
-					fn = *mf.Help
-				} else {
-					fn = *mf.Name
-				}
-				familyNames[fn] = nil
-				familySamples[fn] = append(familySamples[fn], fmt.Sprintf("%.4f", *(mf.Metric[0].Gauge.Value)))
+				familyNames[name] = *mf.Help
+				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Gauge.Value))
 				added++
 			}
 		}
 		if added > 0 {
-			timestamps = append(timestamps, fmt.Sprintf("%.2f", sample.Timestamp.Sub(startTime).Seconds()))
+			timestamps = append(timestamps, timestamp)
 		}
 	}
 	familyNamesSorted := make([]string, 0)
@@ -552,7 +547,7 @@ func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats 
 	cw := csv.NewWriter(w)
 	defer cw.Flush()
 
-	header := []string{"Metric Family"}
+	header := []string{"Metric Family", "Description"}
 	header = append(header, timestamps...)
 	if err := cw.Write(header); err != nil {
 		return err
@@ -560,7 +555,16 @@ func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats 
 
 	// now we write the metric family samples
 	for _, name := range familyNamesSorted {
-		if err := cw.Write(append([]string{name}, familySamples[name]...)); err != nil {
+		row := []string{name, familyNames[name]}
+		for _, ts := range timestamps {
+			if sample, ok := familySamples[name][ts]; ok {
+				row = append(row, sample)
+			} else {
+				// empty/missing value
+				row = append(row, "")
+			}
+		}
+		if err := cw.Write(row); err != nil {
 			return err
 		}
 	}
