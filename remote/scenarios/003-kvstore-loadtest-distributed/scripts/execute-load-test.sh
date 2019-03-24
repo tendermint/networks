@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+# convert the Python "True" or "False" to "true" or "false"
+DEBUG_MODE=`echo ${DEBUG_MODE} | awk '{print tolower($0)}'`
 VERBOSE=""
 if [ "${DEBUG_MODE}" == "true" ]; then
     VERBOSE="-v"

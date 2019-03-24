@@ -1,4 +1,7 @@
 #!/bin/sh
+# convert the Python "True" or "False" to "true" or "false"
+DEBUG_MODE=`echo ${DEBUG_MODE} | awk '{print tolower($0)}'`
+
 TEST_COUNT_MINUS_ONE=$(expr ${TEST_COUNT} - 1)
 CLIENTS_SPAWN_RANGE=$(expr ${CLIENTS_SPAWN_END} - ${CLIENTS_SPAWN_START})
 CLIENTS_SPAWN_INC=$(expr ${CLIENTS_SPAWN_RANGE} / ${TEST_COUNT_MINUS_ONE})
