@@ -38,6 +38,7 @@ function cur_test_params {
     clients_request_wait_min=$4
     clients_request_wait_max=$5
 
+    echo ""
     echo "cur_test=${cur_test}"
     echo "FAST_MODE=${FAST_MODE}"
     echo "CLIENTS_TYPE=${CLIENTS_TYPE}"
@@ -47,9 +48,11 @@ function cur_test_params {
     echo "CLIENTS_REQUEST_WAIT_MAX=${clients_request_wait_max}ms"
     echo "CLIENTS_MAX_INTERACTIONS=${CLIENTS_MAX_INTERACTIONS}"
     echo "LOCAL_RESULTS_DIR=${LOCAL_RESULTS_DIR}/test${cur_test}"
+    echo ""
 }
 
 function global_test_params {
+    echo ""
     echo "TEST_NETWORK=${TEST_NETWORK}"
     echo "DEPLOY_NETWORK_BEFORE_TEST=${DEPLOY_NETWORK_BEFORE_TEST}"
     echo "FAST_MODE=${FAST_MODE}"
@@ -71,6 +74,7 @@ function global_test_params {
     echo "CLIENTS_SPAWN_RATE_INC=${CLIENTS_SPAWN_RATE_INC}"
     echo "CLIENTS_REQUEST_WAIT_MIN_INC=${CLIENTS_REQUEST_WAIT_MIN_INC}"
     echo "CLIENTS_REQUEST_WAIT_MAX_INC=${CLIENTS_REQUEST_WAIT_MAX_INC}"
+    echo ""
 }
 
 GLOBAL_TEST_PARAMS="$(global_test_params)"
