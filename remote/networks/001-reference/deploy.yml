@@ -6,7 +6,13 @@
     local_tmbin: "{{ lookup('env', 'GOPATH') }}/src/github.com/tendermint/tendermint/build/tendermint"
     tm_outage_sim_server_bin: "{{ lookup('env', 'GOPATH') }}/src/github.com/tendermint/networks/build/tm-outage-sim-server"
     fast_mode: no
+    with_cleveldb: no
   tasks:
+    # If we need cleveldb support
+    - name: Install cleveldb on target nodes, if necessary
+      include_tasks: ../../common/ansible/install-cleveldb-support.yml
+      when: (not fast_mode) and with_cleveldb
+
     - name: Check if outage simulator server service is present
       stat: path=/etc/systemd/system/tm-outage-sim-server.service
       register: outage_sim_server
