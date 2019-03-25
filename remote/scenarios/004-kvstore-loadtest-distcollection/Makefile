@@ -3,6 +3,8 @@ INVENTORY?=../../inventory/hosts
 # Which test network should be deployed, if this script deploys one
 # automatically?
 TEST_NETWORK?=001-reference
+NETWORK_CONFIG_SCRIPT?=./scripts/001-default.sh
+NETWORK_VALIDATORS?=4
 
 # Should the test network be redeployed before each test?
 DEPLOY_NETWORK_BEFORE_TEST?=yes
@@ -48,6 +50,8 @@ LOADTEST_LOG?=$(LOCAL_RESULTS_DIR)/collection.log
 execute:
 	INVENTORY=$(INVENTORY) \
 		TEST_NETWORK=$(TEST_NETWORK) \
+		NETWORK_CONFIG_SCRIPT=$(NETWORK_CONFIG_SCRIPT) \
+		NETWORK_VALIDATORS=$(NETWORK_VALIDATORS) \
 		DEPLOY_NETWORK_BEFORE_TEST=$(DEPLOY_NETWORK_BEFORE_TEST) \
 		FAST_MODE=$(FAST_MODE) \
 		DEBUG_MODE=$(DEBUG_MODE) \

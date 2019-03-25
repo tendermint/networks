@@ -54,6 +54,8 @@ function cur_test_params {
 function global_test_params {
     echo ""
     echo "TEST_NETWORK=${TEST_NETWORK}"
+    echo "NETWORK_CONFIG_SCRIPT=${NETWORK_CONFIG_SCRIPT}"
+    echo "NETWORK_VALIDATORS=${NETWORK_VALIDATORS}"
     echo "DEPLOY_NETWORK_BEFORE_TEST=${DEPLOY_NETWORK_BEFORE_TEST}"
     echo "FAST_MODE=${FAST_MODE}"
     echo "TEST_COUNT=${TEST_COUNT}"
@@ -107,6 +109,8 @@ while [ ${cur_test} -lt ${TEST_COUNT} ]; do
     # TODO: Fix this in the deploy.yml script
     INVENTORY=${INVENTORY} \
         FAST_MODE=${FAST_MODE} \
+        NETWORK_CONFIG_SCRIPT=${NETWORK_CONFIG_SCRIPT} \
+        NETWORK_VALIDATORS=${NETWORK_VALIDATORS} \
         DEBUG_MODE=${DEBUG_MODE} \
         CLIENTS_TYPE=${CLIENTS_TYPE} \
         CLIENTS_SPAWN=${clients_spawn} \
