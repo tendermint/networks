@@ -101,6 +101,7 @@
         fail_on_missing: no
       with_items:
         - "{{ loadtest_home }}/stdout.log"
+        - "{{ loadtest_home }}/config.toml"
 
     - name: Fetch load test statistics
       fetch:
