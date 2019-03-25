@@ -102,6 +102,7 @@
       with_items:
         - "{{ loadtest_home }}/stdout.log"
         - "{{ loadtest_home }}/config.toml"
+        - "{{ master.results_dir }}/summary.csv"
 
     - name: Fetch load test statistics
       fetch:
