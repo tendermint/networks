@@ -9,7 +9,7 @@
     with_cleveldb: no
   tasks:
     # If we need cleveldb support
-    - name: Install cleveldb on target nodes, if necessary
+    - name: Install cleveldb dependencies on target nodes, if necessary
       include_tasks: ../../common/ansible/install-cleveldb-support.yml
       when: (not fast_mode) and with_cleveldb
 
