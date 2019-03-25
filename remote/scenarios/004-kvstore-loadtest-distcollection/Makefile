@@ -6,6 +6,9 @@ TEST_NETWORK?=001-reference
 NETWORK_CONFIG_SCRIPT?=./scripts/001-default.sh
 NETWORK_VALIDATORS?=4
 
+# If we're deploying the test network, do we deploy with cleveldb support?
+WITH_CLEVELDB?=false
+
 # Should the test network be redeployed before each test?
 DEPLOY_NETWORK_BEFORE_TEST?=yes
 
@@ -53,6 +56,7 @@ execute:
 		NETWORK_CONFIG_SCRIPT=$(NETWORK_CONFIG_SCRIPT) \
 		NETWORK_VALIDATORS=$(NETWORK_VALIDATORS) \
 		DEPLOY_NETWORK_BEFORE_TEST=$(DEPLOY_NETWORK_BEFORE_TEST) \
+		WITH_CLEVELDB=$(WITH_CLEVELDB) \
 		FAST_MODE=$(FAST_MODE) \
 		DEBUG_MODE=$(DEBUG_MODE) \
 		TEST_COUNT=$(TEST_COUNT) \

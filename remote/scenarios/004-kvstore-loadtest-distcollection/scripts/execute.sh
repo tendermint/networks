@@ -111,6 +111,7 @@ while [ ${cur_test} -lt ${TEST_COUNT} ]; do
         FAST_MODE=${FAST_MODE} \
         NETWORK_CONFIG_SCRIPT=${NETWORK_CONFIG_SCRIPT} \
         NETWORK_VALIDATORS=${NETWORK_VALIDATORS} \
+        WITH_CLEVELDB=${WITH_CLEVELDB} \
         DEBUG_MODE=${DEBUG_MODE} \
         CLIENTS_TYPE=${CLIENTS_TYPE} \
         CLIENTS_SPAWN=${clients_spawn} \
