@@ -46,7 +46,8 @@ func main() {
 								-SimulationSeed=` + os.Getenv("SEED") + ` \
 								-v -timeout 24h` + "```"
 
-	message := "Something went wrong here!"
+	var message string
+
 	if os.Args[2] == "0" {
 		message = "Seed " + os.Getenv("SEED") + " *PASS*"
 	} else {
@@ -69,7 +70,7 @@ func main() {
 	u, _ := url.ParseRequestURI(api_url)
 	url_str := u.String()
 
-	req, err := http.NewRequest("POST", url_str, bytes.NewBuffer(encoded_payload))
+	req, _ := http.NewRequest("POST", url_str, bytes.NewBuffer(encoded_payload))
 	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("SLACK_TOKEN"))
 
