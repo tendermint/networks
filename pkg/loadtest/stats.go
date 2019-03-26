@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -269,6 +270,12 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	cs := CalculateStats(stats)
 	indent := strings.Repeat(" ", indentCount)
 	prefix := indent + linePrefix
+	if err := writer.Write([]string{prefix + " total time", (time.Duration(stats.TotalTime) * time.Nanosecond).String()}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " total time (absolute)", (time.Duration(stats.AbsTotalTime) * time.Nanosecond).String()}); err != nil {
+		return err
+	}
 	if err := writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)}); err != nil {
 		return err
 	}
@@ -299,7 +306,7 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	if err := writer.Write([]string{prefix + " max time", (time.Duration(stats.MaxTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
-	if err := writer.Write([]string{prefix + " top errors:"}); err != nil {
+	if err := writer.Write([]string{prefix + " top errors:", ""}); err != nil {
 		return err
 	}
 	for i := 0; i < len(cs.TopErrors) && i < 10; i++ {
@@ -307,7 +314,7 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 			return err
 		}
 	}
-	if err := writer.Write([]string{prefix + " response time histogram (milliseconds/count):"}); err != nil {
+	if err := writer.Write([]string{prefix + " response time histogram (milliseconds/count):", ""}); err != nil {
 		return err
 	}
 	for bin := int64(0); bin <= stats.ResponseTimes.Timeout; bin += stats.ResponseTimes.BinSize {
@@ -321,33 +328,162 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	return nil
 }
 
+// ParseSummaryStats will attempt to read a `*messages.SummaryStats` object from
+// the given set of rows/columns (assuming they're from a CSV file), and on
+// success will return that object and the number of lines read from the CSV
+// reader. Otherwise an error will be returned.
+//
+// NOTE: Only a single `*messages.SummaryStats` object will be parsed from the
+// given set of rows. The moment one full object has been parsed, the function
+// will return.
+func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
+	curRow, rowCount := 0, len(rows)
+	parseNextVal := func() (string, string, error) {
+		defer func() { curRow++ }()
+		if curRow >= rowCount {
+			return "", "", fmt.Errorf("Missing rows in CSV data")
+		}
+		if len(rows[curRow]) < 2 {
+			return "", "", fmt.Errorf("Missing column in CSV data")
+		}
+		return rows[curRow][0], rows[curRow][1], nil
+	}
+	parseInt := func() (string, int64, error) {
+		desc, v, err := parseNextVal()
+		if err != nil {
+			return "", 0, err
+		}
+		i, err := strconv.ParseInt(v, 10, 64)
+		return desc, i, err
+	}
+	parseDuration := func() (string, int64, error) {
+		desc, v, err := parseNextVal()
+		if err != nil {
+			return "", 0, err
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return "", 0, err
+		}
+		return desc, d.Nanoseconds(), nil
+	}
+
+	stats := &messages.SummaryStats{}
+	var err error
+
+	_, stats.TotalTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, err
+	}
+	_, stats.AbsTotalTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, err
+	}
+	_, stats.TotalClients, err = parseInt()
+	if err != nil {
+		return nil, curRow, err
+	}
+
+	// skip the computed rows
+	curRow += 4
+
+	_, stats.Count, err = parseInt()
+	if err != nil {
+		return nil, curRow, err
+	}
+	_, stats.Errors, err = parseInt()
+	if err != nil {
+		return nil, curRow, err
+	}
+
+	// skip the failure rate % row
+	curRow++
+
+	_, stats.MinTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, fmt.Errorf("Failed to parse min time field: %s", err)
+	}
+	_, stats.MaxTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, fmt.Errorf("Failed to parse max time field: %s", err)
+	}
+
+	// read the top errors
+	stats.ErrorsByType = make(map[string]int64)
+	// skip the "top errors:" line
+	curRow++
+	for curRow < rowCount {
+		if len(rows[curRow]) == 0 {
+			return nil, curRow, fmt.Errorf("Missing rows in CSV data")
+		}
+		if strings.Contains(rows[curRow][0], "response time histogram") {
+			break
+		}
+		desc, count, err := parseInt()
+		if err != nil {
+			return nil, curRow, err
+		}
+		stats.ErrorsByType[desc] = count
+	}
+
+	// read the response time histogram
+	stats.ResponseTimes = &messages.ResponseTimeHistogram{}
+	stats.ResponseTimes.TimeBins = make(map[int64]int64)
+	curBin, prevBin := int64(0), int64(0)
+	curRow++
+	for curRow < rowCount {
+		// it's a sign we've hit the end of the histogram
+		if isEmptyCSVRow(rows[curRow]) {
+			break
+		}
+		binLabel, count, err := parseInt()
+		if err != nil {
+			return nil, curRow, err
+		}
+		prevBin = curBin
+		curBin, err = strconv.ParseInt(strings.Trim(binLabel, " "), 10, 64)
+		if err != nil {
+			return nil, curRow, err
+		}
+		// convert to nanoseconds
+		curBin = (time.Duration(curBin) * time.Millisecond).Nanoseconds()
+		stats.ResponseTimes.TimeBins[curBin] = count
+	}
+	// we assume the final bin is our timeout
+	stats.ResponseTimes.Timeout = curBin
+	stats.ResponseTimes.BinCount = int64(len(stats.ResponseTimes.TimeBins))
+	stats.ResponseTimes.BinSize = curBin - prevBin
+
+	return stats, curRow, nil
+}
+
 // WriteCombinedStats will write the given combined statistics using the
 // specified writer.
 func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 	cw := csv.NewWriter(writer)
 	defer cw.Flush()
 
-	if err := cw.Write([]string{"INTERACTION STATISTICS"}); err != nil {
+	if err := cw.Write([]string{"INTERACTION STATISTICS", ""}); err != nil {
 		return err
 	}
 	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions); err != nil {
 		return err
 	}
 
-	if err := cw.Write([]string{}); err != nil {
+	if err := cw.Write([]string{"", ""}); err != nil {
 		return err
 	}
-	if err := cw.Write([]string{"REQUEST STATISTICS"}); err != nil {
+	if err := cw.Write([]string{"REQUEST STATISTICS", ""}); err != nil {
 		return err
 	}
 	i := 0
 	for reqName, reqStats := range stats.Requests {
 		if i > 0 {
-			if err := cw.Write([]string{}); err != nil {
+			if err := cw.Write([]string{"", ""}); err != nil {
 				return err
 			}
 		}
-		if err := cw.Write([]string{reqName}); err != nil {
+		if err := cw.Write([]string{reqName, ""}); err != nil {
 			return err
 		}
 		if err := WriteSummaryStats(cw, 2, "Requests", reqStats); err != nil {
@@ -356,6 +492,56 @@ func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 		i++
 	}
 	return nil
+}
+
+func isEmptyCSVRow(row []string) bool {
+	for _, col := range row {
+		if len(col) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// ReadCombinedStats will attempt to read a CombinedStats object from the given
+// reader, assuming it's in CSV format, or return an error.
+func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
+	cr := csv.NewReader(r)
+	curRow := 0
+	// read all the data
+	rows, err := cr.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	// skip the "INTERACTION STATISTICS" heading
+	curRow++
+	istats, rowsRead, err := ParseSummaryStats(rows[curRow:])
+	if err != nil {
+		return nil, err
+	}
+	curRow += rowsRead
+
+	// skip the empty row and the "REQUEST STATISTICS" line
+	curRow += 2
+
+	// read the requests' statistics
+	rstats := make(map[string]*messages.SummaryStats)
+	for curRow < len(rows) {
+		// read the request name from this row
+		reqName := rows[curRow][0]
+		curRow++
+		curStats, rowsRead, err := ParseSummaryStats(rows[curRow:])
+		if err != nil {
+			return nil, err
+		}
+		curRow += rowsRead
+		rstats[reqName] = curStats
+		// skip any subsequent empty rows
+		for curRow < len(rows) && isEmptyCSVRow(rows[curRow]) {
+			curRow++
+		}
+	}
+	return &messages.CombinedStats{Interactions: istats, Requests: rstats}, nil
 }
 
 // WriteCombinedStatsToFile will write the given stats object to the specified
@@ -371,6 +557,17 @@ func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) 
 	}
 	defer f.Close()
 	return WriteCombinedStats(f, stats)
+}
+
+// ReadCombinedStatsFromFile will read the combined stats from the given CSV
+// file on success, or return an error.
+func ReadCombinedStatsFromFile(csvFile string) (*messages.CombinedStats, error) {
+	f, err := os.Open(csvFile)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return ReadCombinedStats(f)
 }
 
 //

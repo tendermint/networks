@@ -139,3 +139,100 @@ func assertSummaryStatsEqual(t *testing.T, expected, actual *messages.SummarySta
 		}
 	}
 }
+
+type summaryStatsAddition struct {
+	timeTaken    time.Duration
+	absTimeTaken time.Duration
+	err          error
+}
+
+type summaryStatsTestCase struct {
+	timeout      time.Duration
+	totalClients int64
+	additions    []summaryStatsAddition
+}
+
+type combinedStatsTestCase struct {
+	interactions summaryStatsTestCase
+	requests     map[string]summaryStatsTestCase
+}
+
+func (tc *summaryStatsTestCase) buildSummaryStats() *messages.SummaryStats {
+	stats := loadtest.NewSummaryStats(tc.timeout, tc.totalClients)
+	for _, add := range tc.additions {
+		loadtest.AddStatistic(stats, add.timeTaken, add.absTimeTaken, add.err)
+	}
+	return stats
+}
+
+func (tc *combinedStatsTestCase) buildCombinedStats() *messages.CombinedStats {
+	stats := &messages.CombinedStats{
+		Interactions: tc.interactions.buildSummaryStats(),
+		Requests:     make(map[string]*messages.SummaryStats),
+	}
+	for reqName, stc := range tc.requests {
+		stats.Requests[reqName] = stc.buildSummaryStats()
+	}
+	return stats
+}
+
+func TestStatsReadingAndWriting(t *testing.T) {
+	testCases := []combinedStatsTestCase{
+		combinedStatsTestCase{
+			interactions: summaryStatsTestCase{
+				timeout:      time.Duration(5 * time.Second),
+				totalClients: 1,
+				additions: []summaryStatsAddition{
+					summaryStatsAddition{
+						timeTaken:    time.Duration(400 * time.Millisecond),
+						absTimeTaken: time.Duration(1000 * time.Millisecond),
+						err:          nil,
+					},
+				},
+			},
+			requests: map[string]summaryStatsTestCase{
+				"req1": summaryStatsTestCase{
+					timeout:      time.Duration(2 * time.Second),
+					totalClients: 1,
+					additions: []summaryStatsAddition{
+						summaryStatsAddition{
+							timeTaken:    time.Duration(100 * time.Millisecond),
+							absTimeTaken: time.Duration(300 * time.Millisecond),
+							err:          nil,
+						},
+					},
+				},
+				"req2": summaryStatsTestCase{
+					timeout:      time.Duration(2 * time.Second),
+					totalClients: 1,
+					additions: []summaryStatsAddition{
+						summaryStatsAddition{
+							timeTaken:    time.Duration(300 * time.Millisecond),
+							absTimeTaken: time.Duration(700 * time.Millisecond),
+							err:          nil,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		origCombinedStats := tc.buildCombinedStats()
+		// write the stats to a CSV file
+		tempFile := createTempFile(t)
+		if err := loadtest.WriteCombinedStatsToFile(tempFile, origCombinedStats); err != nil {
+			t.Fatalf("Failed to write combined stats to temporary file: %s (err=%s)", tempFile, err)
+		}
+		// now read the stats back
+		readCombinedStats, err := loadtest.ReadCombinedStatsFromFile(tempFile)
+		if err != nil {
+			t.Fatalf("Failed to read combined stats from temporary file: %s (err=%s)", tempFile, err)
+		}
+
+		if !origCombinedStats.Equal(readCombinedStats) {
+			t.Error("Original stats and stats read back from temp file do not match")
+			printJSONDiff(origCombinedStats, readCombinedStats)
+		}
+	}
+}
