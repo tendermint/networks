@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/tendermint/networks/internal/logging"
+	"github.com/prometheus/common/expfmt"
 
+	pdto "github.com/prometheus/client_model/go"
+	"github.com/tendermint/networks/internal/logging"
 	"github.com/tendermint/networks/pkg/loadtest/messages"
 )
 
@@ -42,6 +46,19 @@ type CalculatedStats struct {
 	AbsPerSec             float64           // Interactions/requests per second overall, including wait times.
 	FailureRate           float64           // The % of interactions/requests that failed.
 	TopErrors             []*FlattenedError // The top 10 errors by error count.
+}
+
+// PrometheusStats encapsulates all of the statistics we retrieved from the
+// Prometheus endpoints for our target nodes.
+type PrometheusStats struct {
+	StartTime       time.Time                         // When was the load test started?
+	TargetNodeStats map[string][]*NodePrometheusStats // Target node stats organized by hostname.
+}
+
+// NodePrometheusStats represents a single test network node's stats from its Prometheus endpoint.
+type NodePrometheusStats struct {
+	Timestamp      time.Time
+	MetricFamilies map[string]*pdto.MetricFamily
 }
 
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
@@ -354,4 +371,223 @@ func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) 
 	}
 	defer f.Close()
 	return WriteCombinedStats(f, stats)
+}
+
+//
+// NodePrometheusStats
+//
+
+// GetNodePrometheusStats will perform a blocking GET request to the given URL
+// to fetch the text-formatted Prometheus metrics for a particular node, parse
+// those metrics, and then either return the parsed metrics or an error.
+func GetNodePrometheusStats(c *http.Client, url string) (*NodePrometheusStats, error) {
+	stats := &NodePrometheusStats{
+		Timestamp:      time.Now(),
+		MetricFamilies: nil,
+	}
+	resp, err := c.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("Non-OK response from URL: %s (%d)", resp.Status, resp.StatusCode)
+	}
+
+	parser := &expfmt.TextParser{}
+	mf, err := parser.TextToMetricFamilies(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	stats.MetricFamilies = mf
+
+	return stats, nil
+}
+
+//
+// PrometheusStats
+//
+
+type nodePrometheusStats struct {
+	hostID string
+	stats  *NodePrometheusStats
+}
+
+func collectPrometheusStats(c *http.Client, hostID, nodeURL string, statsc chan nodePrometheusStats, logger logging.Logger) {
+	stats, err := GetNodePrometheusStats(c, nodeURL)
+	if err == nil {
+		statsc <- nodePrometheusStats{
+			hostID: hostID,
+			stats:  stats,
+		}
+	} else {
+		logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
+	}
+}
+
+// RunCollectors will kick off one goroutine per Tendermint node from which
+// we're collecting Prometheus stats.
+func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool, logger logging.Logger) {
+	clients := make([]*http.Client, 0)
+	statsc := make(chan nodePrometheusStats, len(cfg.TestNetwork.Targets))
+	tickers := make([]*time.Ticker, 0)
+	collectorsShutdownc := make([]chan bool, 0)
+	logger.Debug("Starting up Prometheus collectors", "count", len(cfg.TestNetwork.Targets))
+	ps.StartTime = time.Now()
+	wg := &sync.WaitGroup{}
+	for _, node := range cfg.TestNetwork.Targets {
+		c := &http.Client{
+			Timeout: time.Duration(cfg.TestNetwork.PrometheusPollTimeout),
+		}
+		clients = append(clients, c)
+		ticker := time.NewTicker(time.Duration(cfg.TestNetwork.PrometheusPollInterval))
+		tickers = append(tickers, ticker)
+		collectorShutdownc := make(chan bool, 1)
+		collectorsShutdownc = append(collectorsShutdownc, collectorShutdownc)
+		wg.Add(1)
+		go func(client *http.Client, hostID, nodeURL string, csc chan bool) {
+			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURL", nodeURL)
+			// fire off an initial request for stats (prior to first tick)
+			collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+		collectorLoop:
+			for {
+				select {
+				case <-ticker.C:
+					collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+
+				case <-csc:
+					logger.Debug("Shutting down collector goroutine", "hostID", hostID)
+					break collectorLoop
+				}
+			}
+			wg.Done()
+		}(c, node.ID, node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort), collectorShutdownc)
+	}
+	logger.Debug("Prometheus collectors started")
+
+collectorsLoop:
+	for {
+		select {
+		case nodeStats := <-statsc:
+			ps.TargetNodeStats[nodeStats.hostID] = append(ps.TargetNodeStats[nodeStats.hostID], nodeStats.stats)
+
+		case <-shutdownc:
+			logger.Debug("Shutdown signal received by Prometheus collector loop")
+			break collectorsLoop
+		}
+	}
+	for _, ticker := range tickers {
+		ticker.Stop()
+	}
+	for _, csc := range collectorsShutdownc {
+		csc <- true
+	}
+	// wait for all of the collector loops to shut down
+	wg.Wait()
+
+	logger.Info("Waiting 10 seconds for network to settle post-test...")
+	time.Sleep(10 * time.Second)
+
+	logger.Debug("Doing one final Prometheus stats collection from each node")
+	// do one final collection from each node
+	for i, node := range cfg.TestNetwork.Targets {
+		nodeStats, err := GetNodePrometheusStats(clients[i], node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort))
+		if err != nil {
+			logger.Error("Failed to fetch Prometheus statistics", "hostID", node.ID, "err", err)
+		} else {
+			ps.TargetNodeStats[node.ID] = append(ps.TargetNodeStats[node.ID], nodeStats)
+		}
+	}
+
+	logger.Debug("Prometheus collector loop shut down")
+	donec <- true
+}
+
+func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats []*NodePrometheusStats) error {
+	// first extract a sorted list of the metric families for this node
+	familyNames := make(map[string]string)
+	timestamps := make([]string, 0)
+	// family name -> timestamp string -> formatted floating point value string
+	familySamples := make(map[string]map[string]string)
+	for _, sample := range nodeStats {
+		added := 0
+		timestamp := fmt.Sprintf("%.2f", sample.Timestamp.Sub(startTime).Seconds())
+
+		for name, mf := range sample.MetricFamilies {
+			if _, ok := familySamples[name]; !ok {
+				familySamples[name] = make(map[string]string)
+			}
+			// we only want counters and gauges right now
+			switch *mf.Type {
+			case pdto.MetricType_COUNTER:
+				familyNames[name] = *mf.Help
+				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Counter.Value))
+				added++
+
+			case pdto.MetricType_GAUGE:
+				familyNames[name] = *mf.Help
+				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Gauge.Value))
+				added++
+			}
+		}
+		if added > 0 {
+			timestamps = append(timestamps, timestamp)
+		}
+	}
+	familyNamesSorted := make([]string, 0)
+	for name := range familyNames {
+		familyNamesSorted = append(familyNamesSorted, name)
+	}
+	sort.SliceStable(familyNamesSorted[:], func(i, j int) bool {
+		return strings.Compare(familyNamesSorted[i], familyNamesSorted[j]) < 0
+	})
+
+	// then we write the data to the given file as time series CSV data
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	header := []string{"Metric Family", "Description"}
+	header = append(header, timestamps...)
+	if err := cw.Write(header); err != nil {
+		return err
+	}
+
+	// now we write the metric family samples
+	for _, name := range familyNamesSorted {
+		row := []string{name, familyNames[name]}
+		for _, ts := range timestamps {
+			if sample, ok := familySamples[name][ts]; ok {
+				row = append(row, sample)
+			} else {
+				// empty/missing value
+				row = append(row, "")
+			}
+		}
+		if err := cw.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Dump will write each node's stats to a separate file, named according to the
+// host ID, in the given output directory.
+func (ps *PrometheusStats) Dump(outputPath string) error {
+	if err := os.MkdirAll(outputPath, 0755); err != nil {
+		return err
+	}
+	for hostID, nodeStats := range ps.TargetNodeStats {
+		outputFile := path.Join(outputPath, fmt.Sprintf("%s.csv", hostID))
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := writeTimeSeriesTargetNodeStats(f, ps.StartTime, nodeStats); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,4 +1,7 @@
 #!/bin/sh
+# convert the Python "True" or "False" to "true" or "false"
+DEBUG_MODE=`echo ${DEBUG_MODE} | awk '{print tolower($0)}'`
+
 TEST_COUNT_MINUS_ONE=$(expr ${TEST_COUNT} - 1)
 CLIENTS_SPAWN_RANGE=$(expr ${CLIENTS_SPAWN_END} - ${CLIENTS_SPAWN_START})
 CLIENTS_SPAWN_INC=$(expr ${CLIENTS_SPAWN_RANGE} / ${TEST_COUNT_MINUS_ONE})
@@ -20,9 +23,11 @@ mkdir -p $(dirname ${LOADTEST_LOG})
 cat /dev/null > ${LOADTEST_LOG}
 
 function loadtest_log {
-    echo "\n---------------------------------------------------------------------"
+    echo ""
+    echo "---------------------------------------------------------------------"
     echo "$1"
-    echo "---------------------------------------------------------------------\n"
+    echo "---------------------------------------------------------------------"
+    echo ""
     echo "$1" >> ${LOADTEST_LOG}
 }
 
@@ -33,6 +38,7 @@ function cur_test_params {
     clients_request_wait_min=$4
     clients_request_wait_max=$5
 
+    echo ""
     echo "cur_test=${cur_test}"
     echo "FAST_MODE=${FAST_MODE}"
     echo "CLIENTS_TYPE=${CLIENTS_TYPE}"
@@ -42,10 +48,14 @@ function cur_test_params {
     echo "CLIENTS_REQUEST_WAIT_MAX=${clients_request_wait_max}ms"
     echo "CLIENTS_MAX_INTERACTIONS=${CLIENTS_MAX_INTERACTIONS}"
     echo "LOCAL_RESULTS_DIR=${LOCAL_RESULTS_DIR}/test${cur_test}"
+    echo ""
 }
 
 function global_test_params {
+    echo ""
     echo "TEST_NETWORK=${TEST_NETWORK}"
+    echo "NETWORK_CONFIG_SCRIPT=${NETWORK_CONFIG_SCRIPT}"
+    echo "NETWORK_VALIDATORS=${NETWORK_VALIDATORS}"
     echo "DEPLOY_NETWORK_BEFORE_TEST=${DEPLOY_NETWORK_BEFORE_TEST}"
     echo "FAST_MODE=${FAST_MODE}"
     echo "TEST_COUNT=${TEST_COUNT}"
@@ -66,6 +76,7 @@ function global_test_params {
     echo "CLIENTS_SPAWN_RATE_INC=${CLIENTS_SPAWN_RATE_INC}"
     echo "CLIENTS_REQUEST_WAIT_MIN_INC=${CLIENTS_REQUEST_WAIT_MIN_INC}"
     echo "CLIENTS_REQUEST_WAIT_MAX_INC=${CLIENTS_REQUEST_WAIT_MAX_INC}"
+    echo ""
 }
 
 GLOBAL_TEST_PARAMS="$(global_test_params)"
@@ -80,7 +91,7 @@ cur_test=0
 
 while [ ${cur_test} -lt ${TEST_COUNT} ]; do
     CUR_TEST_PARAMS="$(cur_test_params ${cur_test} ${clients_spawn} ${clients_spawn_rate} ${clients_request_wait_min} ${clients_request_wait_max})"
-    loadtest_log "LOAD TEST ${cur_test}\n${CUR_TEST_PARAMS}"
+    loadtest_log "${CUR_TEST_PARAMS}"
     TEST_OUTPUT_DIR=${LOCAL_RESULTS_DIR}/test${cur_test}
 
     if [ "${DEPLOY_NETWORK_BEFORE_TEST}" == "yes" ]; then
@@ -98,6 +109,10 @@ while [ ${cur_test} -lt ${TEST_COUNT} ]; do
     # TODO: Fix this in the deploy.yml script
     INVENTORY=${INVENTORY} \
         FAST_MODE=${FAST_MODE} \
+        NETWORK_CONFIG_SCRIPT=${NETWORK_CONFIG_SCRIPT} \
+        NETWORK_VALIDATORS=${NETWORK_VALIDATORS} \
+        WITH_CLEVELDB=${WITH_CLEVELDB} \
+        DEBUG_MODE=${DEBUG_MODE} \
         CLIENTS_TYPE=${CLIENTS_TYPE} \
         CLIENTS_SPAWN=${clients_spawn} \
         CLIENTS_SPAWN_RATE="${clients_spawn_rate}.0" \

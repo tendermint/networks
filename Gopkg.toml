@@ -48,3 +48,11 @@
 [[constraint]]
   name = "github.com/tendermint/tendermint"
   version = "v0.30.2"
+
+[[constraint]]
+  name = "github.com/prometheus/common"
+  version = "0.2.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/prometheus/client_model"

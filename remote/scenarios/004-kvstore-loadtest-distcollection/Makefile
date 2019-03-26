@@ -3,12 +3,20 @@ INVENTORY?=../../inventory/hosts
 # Which test network should be deployed, if this script deploys one
 # automatically?
 TEST_NETWORK?=001-reference
+NETWORK_CONFIG_SCRIPT?=./scripts/001-default.sh
+NETWORK_VALIDATORS?=4
+
+# If we're deploying the test network, do we deploy with cleveldb support?
+WITH_CLEVELDB?=false
 
 # Should the test network be redeployed before each test?
 DEPLOY_NETWORK_BEFORE_TEST?=yes
 
 # Should each load test be executed in fast mode?
 FAST_MODE?=false
+
+# Should output logging happen at DEBUG-level?
+DEBUG_MODE?=false
 
 # The number of load tests to execute
 TEST_COUNT?=10
@@ -45,8 +53,12 @@ LOADTEST_LOG?=$(LOCAL_RESULTS_DIR)/collection.log
 execute:
 	INVENTORY=$(INVENTORY) \
 		TEST_NETWORK=$(TEST_NETWORK) \
+		NETWORK_CONFIG_SCRIPT=$(NETWORK_CONFIG_SCRIPT) \
+		NETWORK_VALIDATORS=$(NETWORK_VALIDATORS) \
 		DEPLOY_NETWORK_BEFORE_TEST=$(DEPLOY_NETWORK_BEFORE_TEST) \
+		WITH_CLEVELDB=$(WITH_CLEVELDB) \
 		FAST_MODE=$(FAST_MODE) \
+		DEBUG_MODE=$(DEBUG_MODE) \
 		TEST_COUNT=$(TEST_COUNT) \
 		CLIENTS_TYPE=$(CLIENTS_TYPE) \
 		CLIENTS_SPAWN_START=$(CLIENTS_SPAWN_START) \

@@ -58,10 +58,6 @@ The following test network configurations are available for deployment:
 
 * [`001-reference`](./networks/001-reference/README.md) - A simple reference Tendermint
   network, running `kvstore` with `create_empty_blocks=true`.
-* [`002-no-empty-blocks-issue`](./networks/002-no-empty-blocks-issue/README.md) - A
-  network with a variety of configuration changes based on a series of issues we
-  were seeing resulting in the Tendermint network halting. This network allows
-  us to test for similar issues as experienced by the relevant users.
 
 ## Executing test scenarios
 To execute a particular testing scenario, simply:

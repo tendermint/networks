@@ -53,6 +53,7 @@ type TestNetworkTargetConfig struct {
 	Host string `toml:"host"` // The host address for this node.
 
 	RPCPort        int    `toml:"rpc_port,omitempty"`        // Override for the default Tendermint RPC port for this node.
+	PrometheusHost string `toml:"prometheus_host,omitempty"` // Override the host address for the Prometheus endpoint (useful for using internal IPs).
 	PrometheusPort int    `toml:"prometheus_port,omitempty"` // Override for the default Prometheus port for this node.
 	Outages        string `toml:"outages,omitempty"`         // Specify an outage schedule to try to affect for this host.
 }
@@ -204,10 +205,25 @@ func (c *TestNetworkConfig) GetTargetRPCURLs() []string {
 //
 
 func (c *TestNetworkTargetConfig) Validate(i int) error {
+	if len(c.ID) == 0 {
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing an ID", i))
+	}
 	if len(c.Host) == 0 {
 		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing a host address", i))
 	}
 	return nil
+}
+
+func (c *TestNetworkTargetConfig) GetPrometheusURL(defaultPort int) string {
+	host := c.Host
+	if len(c.PrometheusHost) > 0 {
+		host = c.PrometheusHost
+	}
+	port := defaultPort
+	if c.PrometheusPort > 0 {
+		port = c.PrometheusPort
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
 }
 
 //
