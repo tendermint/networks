@@ -141,9 +141,8 @@ func assertSummaryStatsEqual(t *testing.T, expected, actual *messages.SummarySta
 }
 
 type summaryStatsAddition struct {
-	timeTaken    time.Duration
-	absTimeTaken time.Duration
-	err          error
+	timeTaken time.Duration
+	err       error
 }
 
 type summaryStatsTestCase struct {
@@ -160,7 +159,7 @@ type combinedStatsTestCase struct {
 func (tc *summaryStatsTestCase) buildSummaryStats() *messages.SummaryStats {
 	stats := loadtest.NewSummaryStats(tc.timeout, tc.totalClients)
 	for _, add := range tc.additions {
-		loadtest.AddStatistic(stats, add.timeTaken, add.absTimeTaken, add.err)
+		loadtest.AddStatistic(stats, add.timeTaken, add.err)
 	}
 	return stats
 }
@@ -184,9 +183,8 @@ func TestStatsReadingAndWriting(t *testing.T) {
 				totalClients: 1,
 				additions: []summaryStatsAddition{
 					summaryStatsAddition{
-						timeTaken:    time.Duration(400 * time.Millisecond),
-						absTimeTaken: time.Duration(1000 * time.Millisecond),
-						err:          nil,
+						timeTaken: time.Duration(400 * time.Millisecond),
+						err:       nil,
 					},
 				},
 			},
@@ -196,9 +194,8 @@ func TestStatsReadingAndWriting(t *testing.T) {
 					totalClients: 1,
 					additions: []summaryStatsAddition{
 						summaryStatsAddition{
-							timeTaken:    time.Duration(100 * time.Millisecond),
-							absTimeTaken: time.Duration(300 * time.Millisecond),
-							err:          nil,
+							timeTaken: time.Duration(100 * time.Millisecond),
+							err:       nil,
 						},
 					},
 				},
@@ -207,9 +204,8 @@ func TestStatsReadingAndWriting(t *testing.T) {
 					totalClients: 1,
 					additions: []summaryStatsAddition{
 						summaryStatsAddition{
-							timeTaken:    time.Duration(300 * time.Millisecond),
-							absTimeTaken: time.Duration(700 * time.Millisecond),
-							err:          nil,
+							timeTaken: time.Duration(300 * time.Millisecond),
+							err:       nil,
 						},
 					},
 				},

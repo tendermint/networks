@@ -12,7 +12,7 @@ import (
 // basically).
 func PlotSingleTestSummaryResults(inputDir, outputDir string) error {
 	// ensure the output path exists
-	if err := os.MkdirAll(outputDir, os.ModeDir); err != nil {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("Failed to create output directory %s: %s", outputDir, err.Error())
 	}
 	summaryStatsFile := path.Join(inputDir, "summary.csv")

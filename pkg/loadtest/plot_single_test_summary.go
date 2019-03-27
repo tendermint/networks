@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"fmt"
 	"html/template"
 	"sort"
 	"strings"
@@ -86,6 +87,14 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 					<td>{{.ClientMaxInteractions}}</td>
 					<td>
 						<i class="fas fa-info-circle" title="The maximum number of interactions between a client and the Tendermint network"></i>
+					</td>
+				</tr>
+
+				<tr>
+					<td>Test run time</td>
+					<td>{{.AbsTotalTime}}</td>
+					<td>
+						<i class="fas fa-info-circle" title="The total time (from the master's perspective) in which the load testing completed"></i>
 					</td>
 				</tr>
 			</tbody>
@@ -201,16 +210,6 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 	<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
 
 	<script>
-		var interactionRTBins = [
-			{{range $i, $bin := $.InteractionsResponseTimesBins -}}
-				{{$bin}}{{if isNotLastItem $i, $.InteractionsResponseTimesBins }},{{end -}}
-			{{end}}
-		];
-		var interactionRTCounts = [
-			{{range $i, $count := $.InteractionsResponseTimesCounts -}}
-				{{$count}}{{if isNotLastItem $i, $.InteractionsResponseTimesCounts }},{{end -}}
-			{{end}}
-		];
 		var colorPalette = [
 			'hsl(171, 100%, 41%)',
 			'hsl(217, 71%, 53%)',
@@ -235,11 +234,11 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			var chart = new Chart(ctx, {
 				type: 'bar',
 				data: {
-					labels: interactionRTBins,
+					labels: bins,
 					datasets: [{
 						label: ytitle,
 						backgroundColor: color,
-						data: interactionRTCounts
+						data: counts
 					}]
 				},
 				options: {
@@ -268,12 +267,31 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 
 		generateHistogram(
 			"interaction-rt-chart", 
-			interactionRTBins, 
-			interactionRTCounts, 
+			[
+{{.InteractionsResponseTimesBins}}
+			], 
+			[
+{{.InteractionsResponseTimesCounts}}
+			], 
 			nextColor(), 
 			"Interaction Response Time (milliseconds)",
 			"Counts"
 		);
+
+		{{range $i, $req := $.Requests}}
+		generateHistogram(
+			"{{$req.Name}}-rt-chart", 
+			[
+{{$req.ResponseTimesBins}}
+			], 
+			[
+{{$req.ResponseTimesCounts}}
+			], 
+			nextColor(), 
+			"{{$req.Name}} Response Time (milliseconds)",
+			"Counts"
+		);
+		{{end}}
 	</script>
 </body>
 </html>
@@ -283,27 +301,28 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 // load test's summary plot.
 type SingleTestSummaryContext struct {
 	// Summary parameters
-	ClientType            string
-	SlaveNodeCount        int
-	ClientSpawn           int
-	ClientSpawnRate       float64
-	ClientRequestWaitMin  time.Duration
-	ClientRequestWaitMax  time.Duration
-	ClientRequestTimeout  time.Duration
-	ClientMaxInteractions int
+	ClientType            template.HTML
+	SlaveNodeCount        template.HTML
+	ClientSpawn           template.HTML
+	ClientSpawnRate       template.HTML
+	ClientRequestWaitMin  template.HTML
+	ClientRequestWaitMax  template.HTML
+	ClientRequestTimeout  template.HTML
+	ClientMaxInteractions template.HTML
+	AbsTotalTime          template.HTML
 
 	// Interaction-related parameters
-	InteractionsTotalClients int64
-	InteractionsPerSec       float64
-	InteractionsCount        int64
-	InteractionsErrors       int64
-	InteractionsErrorRate    float64
-	InteractionsMinTime      time.Duration
-	InteractionsMaxTime      time.Duration
+	InteractionsTotalClients template.HTML
+	InteractionsPerSec       template.HTML
+	InteractionsCount        template.HTML
+	InteractionsErrors       template.HTML
+	InteractionsErrorRate    template.HTML
+	InteractionsMinTime      template.HTML
+	InteractionsMaxTime      template.HTML
 
 	// For the interaction response times histogram
-	InteractionsResponseTimesBins   []int64
-	InteractionsResponseTimesCounts []int64
+	InteractionsResponseTimesBins   template.JS
+	InteractionsResponseTimesCounts template.JS
 
 	// Request-related parameters
 	Requests []SingleTestSummaryRequestParams
@@ -312,17 +331,17 @@ type SingleTestSummaryContext struct {
 // SingleTestSummaryRequestParams encapsulates parameters for a single request
 // type in the above plot.
 type SingleTestSummaryRequestParams struct {
-	Name      string
-	PerSec    float64
-	Count     int64
-	Errors    int64
-	ErrorRate float64
-	MinTime   time.Duration
-	MaxTime   time.Duration
+	Name      template.HTML
+	PerSec    template.HTML
+	Count     template.HTML
+	Errors    template.HTML
+	ErrorRate template.HTML
+	MinTime   template.HTML
+	MaxTime   template.HTML
 
 	// For the request response times histogram
-	ResponseTimesBins   []int64
-	ResponseTimesCounts []int64
+	ResponseTimesBins   template.JS
+	ResponseTimesCounts template.JS
 }
 
 // NewSingleTestSummaryContext creates the relevant context to be able to render
@@ -330,27 +349,28 @@ type SingleTestSummaryRequestParams struct {
 func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats) SingleTestSummaryContext {
 	icstats := CalculateStats(stats.Interactions)
 	// flatten the interaction response time histogram
-	ibins, icounts := FlattenResponseTimeHistogram(stats.Interactions.ResponseTimes)
+	ibins, icounts := FlattenResponseTimeHistogram(stats.Interactions.ResponseTimes, "				")
 	return SingleTestSummaryContext{
-		ClientType:            cfg.Clients.Type,
-		SlaveNodeCount:        cfg.Master.ExpectSlaves,
-		ClientSpawn:           cfg.Clients.Spawn,
-		ClientSpawnRate:       cfg.Clients.SpawnRate,
-		ClientRequestWaitMin:  time.Duration(cfg.Clients.RequestWaitMin),
-		ClientRequestWaitMax:  time.Duration(cfg.Clients.RequestWaitMax),
-		ClientRequestTimeout:  time.Duration(cfg.Clients.RequestTimeout),
-		ClientMaxInteractions: cfg.Clients.MaxInteractions,
+		ClientType:            template.HTML(cfg.Clients.Type),
+		SlaveNodeCount:        template.HTML(fmt.Sprintf("%d", cfg.Master.ExpectSlaves)),
+		ClientSpawn:           template.HTML(fmt.Sprintf("%d", cfg.Clients.Spawn)),
+		ClientSpawnRate:       template.HTML(fmt.Sprintf("%.1f", cfg.Clients.SpawnRate)),
+		ClientRequestWaitMin:  template.HTML(fmt.Sprintf("%.0fms", float64(time.Duration(cfg.Clients.RequestWaitMin))/float64(time.Millisecond))),
+		ClientRequestWaitMax:  template.HTML(fmt.Sprintf("%.0fms", float64(time.Duration(cfg.Clients.RequestWaitMax))/float64(time.Millisecond))),
+		ClientRequestTimeout:  template.HTML(fmt.Sprintf("%.0fms", float64(time.Duration(cfg.Clients.RequestTimeout))/float64(time.Millisecond))),
+		ClientMaxInteractions: template.HTML(fmt.Sprintf("%d", cfg.Clients.MaxInteractions)),
+		AbsTotalTime:          template.HTML(fmt.Sprintf("%.2fs", float64(stats.Interactions.AbsTotalTime)/float64(time.Second))),
 
-		InteractionsTotalClients: stats.Interactions.TotalClients,
-		InteractionsPerSec:       icstats.AbsPerSec,
-		InteractionsCount:        stats.Interactions.Count,
-		InteractionsErrors:       stats.Interactions.Errors,
-		InteractionsErrorRate:    icstats.FailureRate,
-		InteractionsMinTime:      time.Duration(stats.Interactions.MinTime),
-		InteractionsMaxTime:      time.Duration(stats.Interactions.MaxTime),
+		InteractionsTotalClients: template.HTML(fmt.Sprintf("%d", stats.Interactions.TotalClients)),
+		InteractionsPerSec:       template.HTML(fmt.Sprintf("%.2f", icstats.AbsPerSec)),
+		InteractionsCount:        template.HTML(fmt.Sprintf("%d", stats.Interactions.Count)),
+		InteractionsErrors:       template.HTML(fmt.Sprintf("%d", stats.Interactions.Errors)),
+		InteractionsErrorRate:    template.HTML(fmt.Sprintf("%.2f", icstats.FailureRate)),
+		InteractionsMinTime:      template.HTML(fmt.Sprintf("%.1fms", float64(time.Duration(stats.Interactions.MinTime))/float64(time.Millisecond))),
+		InteractionsMaxTime:      template.HTML(fmt.Sprintf("%.1fms", float64(time.Duration(stats.Interactions.MaxTime))/float64(time.Millisecond))),
 
-		InteractionsResponseTimesBins:   ibins,
-		InteractionsResponseTimesCounts: icounts,
+		InteractionsResponseTimesBins:   template.JS(ibins),
+		InteractionsResponseTimesCounts: template.JS(icounts),
 
 		Requests: buildRequestsCtx(stats.Requests),
 	}
@@ -369,17 +389,17 @@ func buildRequestsCtx(stats map[string]*messages.SummaryStats) []SingleTestSumma
 		return strings.Compare(reqNames[i], reqNames[j]) < 0
 	})
 	for _, reqName := range reqNames {
-		rbins, rcounts := FlattenResponseTimeHistogram(stats[reqName].ResponseTimes)
+		rbins, rcounts := FlattenResponseTimeHistogram(stats[reqName].ResponseTimes, "				")
 		params := SingleTestSummaryRequestParams{
-			Name:                reqName,
-			PerSec:              rcstats[reqName].AbsPerSec,
-			Count:               stats[reqName].Count,
-			Errors:              stats[reqName].Errors,
-			ErrorRate:           rcstats[reqName].FailureRate,
-			MinTime:             time.Duration(stats[reqName].MinTime),
-			MaxTime:             time.Duration(stats[reqName].MaxTime),
-			ResponseTimesBins:   rbins,
-			ResponseTimesCounts: rcounts,
+			Name:                template.HTML(reqName),
+			PerSec:              template.HTML(fmt.Sprintf("%.2f", rcstats[reqName].AbsPerSec)),
+			Count:               template.HTML(fmt.Sprintf("%d", stats[reqName].Count)),
+			Errors:              template.HTML(fmt.Sprintf("%d", stats[reqName].Errors)),
+			ErrorRate:           template.HTML(fmt.Sprintf("%.2f", rcstats[reqName].FailureRate)),
+			MinTime:             template.HTML(fmt.Sprintf("%.1fms", float64(stats[reqName].MinTime)/float64(time.Millisecond))),
+			MaxTime:             template.HTML(fmt.Sprintf("%.1fms", float64(stats[reqName].MaxTime)/float64(time.Millisecond))),
+			ResponseTimesBins:   template.JS(rbins),
+			ResponseTimesCounts: template.JS(rcounts),
 		}
 		result = append(result, params)
 	}

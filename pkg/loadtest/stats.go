@@ -36,17 +36,14 @@ type FlattenedError struct {
 // CalculatedStats includes a number of parameters that can be calculated from a
 // `messages.SummaryStats` object.
 type CalculatedStats struct {
-	AvgTotalClientTime    float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
-	AvgAbsTotalClientTime float64           // Average total time waiting for client's interactions/requests to complete, including wait times.
-	CountPerClient        float64           // Number of interactions/requests per client.
-	AvgTimePerClient      float64           // Average time per interaction/request per client.
-	AvgAbsTimePerClient   float64           // Average time per interaction/request per client, including wait times.
-	PerSecPerClient       float64           // Interactions/requests per second per client.
-	AbsPerSecPerClient    float64           // Interactions/requests per second per client, including wait times.
-	PerSec                float64           // Interactions/requests per second overall.
-	AbsPerSec             float64           // Interactions/requests per second overall, including wait times.
-	FailureRate           float64           // The % of interactions/requests that failed.
-	TopErrors             []*FlattenedError // The top 10 errors by error count.
+	AvgTotalClientTime float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
+	CountPerClient     float64           // Number of interactions/requests per client.
+	AvgTimePerClient   float64           // Average time per interaction/request per client.
+	PerSecPerClient    float64           // Interactions/requests per second per client.
+	PerSec             float64           // Interactions/requests per second overall.
+	AbsPerSec          float64           // Interactions/requests per second overall, including wait times.
+	FailureRate        float64           // The % of interactions/requests that failed.
+	TopErrors          []*FlattenedError // The top 10 errors by error count.
 }
 
 // PrometheusStats encapsulates all of the statistics we retrieved from the
@@ -56,10 +53,19 @@ type PrometheusStats struct {
 	TargetNodeStats map[string][]*NodePrometheusStats // Target node stats organized by hostname.
 }
 
-// NodePrometheusStats represents a single test network node's stats from its Prometheus endpoint.
+// NodePrometheusStats represents a single test network node's stats from its
+// Prometheus endpoint.
 type NodePrometheusStats struct {
 	Timestamp      time.Time
 	MetricFamilies map[string]*pdto.MetricFamily
+}
+
+// MasterStats encapsulates all statistics relevant to a master node.
+type MasterStats struct {
+	Combined   *messages.CombinedStats // Interaction/request-derived statistics
+	Prometheus *PrometheusStats        // Stats from Prometheus endpoints
+
+	LoadTestStartTime time.Time // At what time did we start the load testing?
 }
 
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
@@ -72,9 +78,8 @@ func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.Summar
 }
 
 // AddStatistic adds a single statistic to the given SummaryStats object.
-func AddStatistic(stats *messages.SummaryStats, timeTaken, absTimeTaken time.Duration, err error) {
+func AddStatistic(stats *messages.SummaryStats, timeTaken time.Duration, err error) {
 	timeTakenNs := int64(timeTaken) / int64(time.Nanosecond)
-	absTimeTakenNs := int64(absTimeTaken) / int64(time.Nanosecond)
 	// we cap the time taken at the response timeout
 	if timeTakenNs > stats.ResponseTimes.Timeout {
 		timeTakenNs = stats.ResponseTimes.Timeout
@@ -94,7 +99,6 @@ func AddStatistic(stats *messages.SummaryStats, timeTaken, absTimeTaken time.Dur
 
 	stats.Count++
 	stats.TotalTime += timeTakenNs
-	stats.AbsTotalTime += absTimeTakenNs
 
 	if err != nil {
 		stats.Errors++
@@ -174,38 +178,33 @@ func FlattenedSortedErrors(stats *messages.SummaryStats) []*FlattenedError {
 func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
 	// average total time for all cumulative interactions/requests per client
 	avgTotalClientTime := math.Round(float64(stats.TotalTime) / float64(stats.TotalClients))
-	avgAbsTotalClientTime := math.Round(float64(stats.AbsTotalTime) / float64(stats.TotalClients))
 	// number of interactions/requests per client
 	countPerClient := math.Round(float64(stats.Count) / float64(stats.TotalClients))
 	// average time per interaction/request per client
 	avgTimePerClient := float64(0)
-	avgAbsTimePerClient := float64(0)
 	if countPerClient > 0 {
 		avgTimePerClient = avgTotalClientTime / countPerClient
-		avgAbsTimePerClient = avgAbsTotalClientTime / countPerClient
 	}
 	// interactions/requests per second per client
 	perSecPerClient := float64(0)
-	absPerSecPerClient := float64(0)
 	if avgTotalClientTime > 0 {
 		perSecPerClient = 1 / (avgTimePerClient / float64(time.Second))
-		absPerSecPerClient = 1 / (avgAbsTimePerClient / float64(time.Second))
 	}
 	// interactions/requests per second overall
 	perSec := perSecPerClient * float64(stats.TotalClients)
-	absPerSec := absPerSecPerClient * float64(stats.TotalClients)
+	absPerSec := float64(0)
+	if stats.AbsTotalTime > 0 {
+		absPerSec = float64(stats.Count) / time.Duration(stats.AbsTotalTime).Seconds()
+	}
 	return &CalculatedStats{
-		AvgTotalClientTime:    avgTotalClientTime,
-		AvgAbsTotalClientTime: avgAbsTotalClientTime,
-		CountPerClient:        countPerClient,
-		AvgTimePerClient:      avgTimePerClient,
-		AvgAbsTimePerClient:   avgAbsTimePerClient,
-		PerSecPerClient:       perSecPerClient,
-		AbsPerSecPerClient:    absPerSecPerClient,
-		PerSec:                perSec,
-		AbsPerSec:             absPerSec,
-		FailureRate:           float64(100) * (float64(stats.Errors) / float64(stats.Count)),
-		TopErrors:             FlattenedSortedErrors(stats),
+		AvgTotalClientTime: avgTotalClientTime,
+		CountPerClient:     countPerClient,
+		AvgTimePerClient:   avgTimePerClient,
+		PerSecPerClient:    perSecPerClient,
+		PerSec:             perSec,
+		AbsPerSec:          absPerSec,
+		FailureRate:        float64(100) * (float64(stats.Errors) / float64(stats.Count)),
+		TopErrors:          FlattenedSortedErrors(stats),
 	}
 }
 
@@ -217,7 +216,6 @@ func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.Su
 
 	logger.Info(logPrefix+" total clients", "value", stats.TotalClients)
 	logger.Info(logPrefix+" per second per client", "value", fmt.Sprintf("%.2f", cs.PerSecPerClient))
-	logger.Info(logPrefix+" per second per client (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient))
 	logger.Info(logPrefix+" per second overall", "value", fmt.Sprintf("%.2f", cs.PerSec))
 	logger.Info(logPrefix+" per second overall (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSec))
 	logger.Info(logPrefix+" count", "value", stats.Count)
@@ -267,11 +265,22 @@ func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHisto
 // FlattenResponseTimeHistogram will take the given histogram object and convert
 // it into two flattened arrays, where the first returned array will be the bins
 // and the second will be the counts.
-func FlattenResponseTimeHistogram(h *messages.ResponseTimeHistogram) ([]int64, []int64) {
-	bins, counts := make([]int64, 0), make([]int64, 0)
-	for bin := int64(0); bin < h.Timeout; bin += h.BinSize {
-		bins = append(bins, bin)
-		counts = append(counts, h.TimeBins[bin])
+func FlattenResponseTimeHistogram(h *messages.ResponseTimeHistogram, indent string) (string, string) {
+	bins, counts := indent, indent
+	for i := int64(0); i < h.BinCount; i++ {
+		bin := h.BinSize * i
+		bins += fmt.Sprintf("%d", time.Duration(bin)/time.Millisecond)
+		counts += fmt.Sprintf("%d", h.TimeBins[bin])
+
+		if i < (h.BinCount - 1) {
+			bins += ", "
+			counts += ", "
+		}
+
+		if (i+1)%10 == 0 {
+			bins += "\n" + indent
+			counts += "\n" + indent
+		}
 	}
 	return bins, counts
 }
@@ -292,9 +301,6 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 		return err
 	}
 	if err := writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)}); err != nil {
-		return err
-	}
-	if err := writer.Write([]string{prefix + " per second per client (absolute)", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient)}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)}); err != nil {
@@ -397,7 +403,7 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 	}
 
 	// skip the computed rows
-	curRow += 4
+	curRow += 3
 
 	_, stats.Count, err = parseInt()
 	if err != nil {
@@ -828,4 +834,36 @@ func (ps *PrometheusStats) Dump(outputPath string) error {
 		}
 	}
 	return nil
+}
+
+//
+// MasterStats
+//
+
+// NewMasterStats instantiates a new `MasterStats` object for use in tracking
+// statistics related to the master node.
+func NewMasterStats(cfg *Config) *MasterStats {
+	return &MasterStats{
+		Combined: GetClientFactory(cfg.Clients.Type).NewStats(ClientParams{
+			TargetNodes:        cfg.TestNetwork.GetTargetRPCURLs(),
+			InteractionTimeout: time.Duration(cfg.Clients.InteractionTimeout),
+			RequestTimeout:     time.Duration(cfg.Clients.RequestTimeout),
+			RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
+			RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
+		}),
+		Prometheus: &PrometheusStats{
+			TargetNodeStats: make(map[string][]*NodePrometheusStats),
+		},
+	}
+}
+
+// UpdateAbsTotalTime will update the absolute total time that the test has been
+// running, from the master's perspective. This aids in computing *absolute*
+// requests or interactions per second.
+func (s *MasterStats) UpdateAbsTotalTime(t time.Duration) {
+	n := t.Nanoseconds()
+	s.Combined.Interactions.AbsTotalTime = n
+	for _, reqStats := range s.Combined.Requests {
+		reqStats.AbsTotalTime = n
+	}
 }
