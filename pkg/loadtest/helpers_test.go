@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"testing"
 )
@@ -18,19 +17,6 @@ func createTempFile(t *testing.T) string {
 	}
 	defer tf.Close()
 	return tf.Name()
-}
-
-func dumpFileToStdout(filename string) {
-	f, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	buf := make([]byte, 1024*1024)
-	if _, err := f.Read(buf); err != nil {
-		panic(err)
-	}
-	fmt.Println(string(buf))
 }
 
 func findLongestRow(rows []string) int {
