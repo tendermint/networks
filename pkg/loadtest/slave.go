@@ -25,6 +25,9 @@ type Slave struct {
 	master        *actor.PID
 	shuttingDown  bool
 
+	checkinTicker *time.Ticker
+	stopCheckin   chan bool
+
 	mtx *sync.Mutex
 }
 
@@ -43,6 +46,8 @@ func NewSlave(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error) 
 			clientFactory: GetClientFactory(cfg.Clients.Type),
 			master:        actor.NewPID(cfg.Slave.Master, "master"),
 			shuttingDown:  false,
+			checkinTicker: nil,
+			stopCheckin:   make(chan bool, 1),
 			mtx:           &sync.Mutex{},
 		}
 	})
@@ -128,6 +133,27 @@ func (s *Slave) startLoadTest(ctx actor.Context) {
 		s.doLoadTest(ctx_, slavePID)
 		ctx_.Send(slavePID, &messages.SlaveFinished{Sender: ctx_.Self()})
 	}(ctx, ctx.Self())
+
+	s.checkinTicker = time.NewTicker(DefaultHealthCheckInterval)
+	go s.checkinLoop(ctx)
+}
+
+func (s *Slave) checkinLoop(ctx actor.Context) {
+loop:
+	for {
+		select {
+		case <-s.checkinTicker.C:
+			s.doCheckin(ctx)
+
+		case <-s.stopCheckin:
+			break loop
+		}
+	}
+}
+
+func (s *Slave) doCheckin(ctx actor.Context) {
+	s.logger.Debug("Checking in with master")
+	ctx.Send(s.master, &messages.LoadTestUnderway{Sender: ctx.Self()})
 }
 
 func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
@@ -231,6 +257,9 @@ func (s *Slave) stopLoadTest() {
 	s.mtx.Lock()
 	s.shuttingDown = true
 	s.mtx.Unlock()
+
+	// stop the checkin loop
+	s.stopCheckin <- true
 }
 
 func (s *Slave) isShuttingDown() bool {

@@ -25,6 +25,14 @@ message StartLoadTest {
     actor.PID Sender = 1;
 }
 
+// LoadTestUnderway is sent by slaves on a regular basis from the instant that
+// load testing starts. This acts as a notification to the master that the
+// slaves are, in fact, testing, as well as a form of health check/heartbeat to
+// ensure that the load testing completes effectively.
+message LoadTestUnderway {
+    actor.PID Sender = 1;
+}
+
 // MasterFailed is sent by the master node to the slaves if the master node
 // encounters an error from which it cannot recover.
 message MasterFailed {

@@ -10,6 +10,20 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// DefaultHealthCheckInterval is the interval at which slave nodes are expected
+// to send a `LoadTestUnderway` message after starting their load testing.
+const DefaultHealthCheckInterval = 10 * time.Second
+
+// DefaultMaxMissedHealthChecks is the number of health checks that a slave can
+// miss before being considered as "failed" (i.e. one more missed health check
+// than `DefaultMaxMissedHealthChecks` will result in total load testing
+// failure).
+const DefaultMaxMissedHealthChecks = 2
+
+// DefaultMaxMissedHealthCheckPeriod is the time after which a slave is
+// considered to have failed if we don't hear from it during that period.
+const DefaultMaxMissedHealthCheckPeriod = ((DefaultMaxMissedHealthChecks + 1) * DefaultHealthCheckInterval)
+
 // Config is the central configuration structure for our load testing, from both
 // the master and slaves' perspectives.
 type Config struct {

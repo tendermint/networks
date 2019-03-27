@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"fmt"
 	"path"
 	"sync"
 	"time"
@@ -23,6 +24,10 @@ type Master struct {
 	istats *messages.CombinedStats // Interaction/request-derived statistics
 	pstats *PrometheusStats        // Stats from Prometheus endpoints
 	mtx    *sync.Mutex
+
+	lastCheckin            map[string]time.Time // The last time we received a "load testing underway" message from each slave (ID -> last checkin time)
+	checkinTicker          *time.Ticker
+	stopSlaveHealthChecker chan bool
 
 	statsShutdownc chan bool
 	statsDonec     chan bool
@@ -54,9 +59,12 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 			pstats: &PrometheusStats{
 				TargetNodeStats: make(map[string][]*NodePrometheusStats),
 			},
-			mtx:            &sync.Mutex{},
-			statsShutdownc: make(chan bool, 1),
-			statsDonec:     make(chan bool, 1),
+			lastCheckin:            make(map[string]time.Time),
+			checkinTicker:          nil,
+			stopSlaveHealthChecker: make(chan bool, 1),
+			mtx:                    &sync.Mutex{},
+			statsShutdownc:         make(chan bool, 1),
+			statsDonec:             make(chan bool, 1),
 		}
 	})
 	pid, err := ctx.SpawnNamed(props, "master")
@@ -86,6 +94,9 @@ func (m *Master) Receive(ctx actor.Context) {
 
 	case *messages.SlaveFinished:
 		m.slaveFinished(ctx, msg)
+
+	case *messages.MasterFailed:
+		m.masterFailed(ctx, msg)
 
 	case *messages.Kill:
 		m.kill(ctx)
@@ -142,6 +153,7 @@ func (m *Master) slaveReady(ctx actor.Context, msg *messages.SlaveReady) {
 		// keep track of the slave
 		m.slaves.Add(slave)
 		m.logger.Info("Added incoming slave", "slaveCount", m.slaves.Len(), "expected", m.cfg.Master.ExpectSlaves)
+		m.trackSlaveCheckin(slave.GetId())
 		// tell the slave it's got the go-ahead
 		ctx.Send(slave, &messages.SlaveAccepted{Sender: ctx.Self()})
 		// if we have enough slaves to start the load testing
@@ -154,6 +166,53 @@ func (m *Master) slaveReady(ctx actor.Context, msg *messages.SlaveReady) {
 func (m *Master) startLoadTest(ctx actor.Context) {
 	m.logger.Info("Accepted enough connected slaves - starting load test", "slaveCount", m.slaves.Len())
 	m.broadcast(ctx, &messages.StartLoadTest{Sender: ctx.Self()})
+	m.checkinTicker = time.NewTicker(DefaultHealthCheckInterval)
+	go m.slaveHealthChecker(ctx)
+}
+
+func (m *Master) slaveHealthChecker(ctx actor.Context) {
+loop:
+	for {
+		select {
+		case <-m.checkinTicker.C:
+			m.checkSlaveHealth(ctx)
+
+		case <-m.stopSlaveHealthChecker:
+			break loop
+		}
+	}
+}
+
+func (m *Master) checkSlaveHealth(ctx actor.Context) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	for slaveID, lastSeen := range m.lastCheckin {
+		if time.Since(lastSeen) >= DefaultMaxMissedHealthCheckPeriod {
+			m.logger.Error("Failed to see slave recently enough", "slaveID", slaveID, "lastSeen", lastSeen.String())
+			ctx.Send(ctx.Self(), &messages.MasterFailed{
+				Sender: ctx.Self(),
+				Reason: fmt.Sprintf("Failed to see slave %s within %s", slaveID, DefaultMaxMissedHealthCheckPeriod.String()),
+			})
+			// don't bother checking any of the other slaves (plus this will
+			// most likely result in bombardment of the slaves with MasterFailed
+			// messages)
+			return
+		}
+	}
+}
+
+func (m *Master) masterFailed(ctx actor.Context, msg *messages.MasterFailed) {
+	// rebroadcast this message to the slaves
+	m.broadcast(ctx, msg)
+	// we're done here
+	m.shutdown(ctx, NewError(ErrSlaveFailed, nil))
+}
+
+func (m *Master) trackSlaveCheckin(slaveID string) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.lastCheckin[slaveID] = time.Now()
 }
 
 func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
@@ -203,6 +262,8 @@ func (m *Master) stopPrometheusCollectors() {
 }
 
 func (m *Master) shutdown(ctx actor.Context, err error) {
+	// stop checking slave health
+	m.stopSlaveHealthChecker <- true
 	m.stopPrometheusCollectors()
 	m.writeStats()
 	if err != nil {
