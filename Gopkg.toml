@@ -47,7 +47,7 @@
 
 [[constraint]]
   name = "github.com/tendermint/tendermint"
-  version = "v0.30.2"
+  version = ">0.30.0"
 
 [[constraint]]
   name = "github.com/prometheus/common"
