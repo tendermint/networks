@@ -93,7 +93,7 @@ func (m *Master) Receive(ctx actor.Context) {
 		m.slaveFailed(ctx, msg)
 
 	case *messages.LoadTestUnderway:
-		m.trackSlaveCheckin(ctx.Sender().GetId())
+		m.trackSlaveCheckin(msg.Sender.Id)
 
 	case *messages.SlaveFinished:
 		m.slaveFinished(ctx, msg)
@@ -156,7 +156,7 @@ func (m *Master) slaveReady(ctx actor.Context, msg *messages.SlaveReady) {
 		// keep track of the slave
 		m.slaves.Add(slave)
 		m.logger.Info("Added incoming slave", "slaveCount", m.slaves.Len(), "expected", m.cfg.Master.ExpectSlaves)
-		m.trackSlaveCheckin(slave.GetId())
+		m.trackSlaveCheckin(slave.Id)
 		// tell the slave it's got the go-ahead
 		ctx.Send(slave, &messages.SlaveAccepted{Sender: ctx.Self()})
 		// if we have enough slaves to start the load testing
