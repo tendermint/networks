@@ -5,6 +5,7 @@ DEBUG_MODE?=false
 FETCH_RESULTS_ONLY?=false
 TMLOADTEST_PATH?=$(GOPATH)/src/github.com/tendermint/networks
 TMLOADTEST_BINARY?=$(TMLOADTEST_PATH)/build/tm-load-test
+MASTER_NODE?=tok0
 CLIENTS_TYPE?=tmrpc
 CLIENTS_SPAWN?=1000
 CLIENTS_SPAWN_RATE?=20.0
@@ -26,19 +27,27 @@ CLIENTS_CONFIG?="{\"clients\":{\
 \"interaction_timeout\": \"${CLIENTS_INTERACTION_TIMEOUT}\",\
 }}"
 LOCAL_RESULTS_DIR?=/tmp/003-kvstore-loadtest-distributed
-.PHONY: execute
+.PHONY: execute plot-results
 
 execute:
-	if [ "${FAST_MODE}" == "false" ] && [ "${FETCH_RESULTS_ONLY}" == "false" ]; then \
+	@if [ "${FAST_MODE}" == "false" ] && [ "${FETCH_RESULTS_ONLY}" == "false" ]; then \
+		echo "Building tm-load-test for Linux..."; \
 		$(MAKE) -C $(TMLOADTEST_PATH) build-tm-load-test-linux; \
 	fi
-	mkdir -p $(LOCAL_RESULTS_DIR)
-	rm -rf $(LOCAL_RESULTS_DIR)/*
+	@mkdir -p $(LOCAL_RESULTS_DIR)
+	@rm -rf $(LOCAL_RESULTS_DIR)/*
 	ansible-playbook -i $(INVENTORY) \
 		-e "{\"local_results_dir\":\"${LOCAL_RESULTS_DIR}\"}" \
 		-e "{\"fast_mode\": ${FAST_MODE}}" \
 		-e "{\"debug_mode\": ${DEBUG_MODE}}" \
 		-e "{\"fetch_results_only\": ${FETCH_RESULTS_ONLY}}" \
+		-e "{\"loadtest_master_node\":\"${MASTER_NODE}\"}" \
 		-e "{\"binaries\": {\"tmloadtest\": \"${TMLOADTEST_BINARY}\"}}" \
 		-e $(CLIENTS_CONFIG) \
 		deploy.yml
+	
+	@$(MAKE) plot-results
+
+plot-results:
+	@echo "Plotting load test results in ${LOCAL_RESULTS_DIR}..."
+	@go run ./scripts/plot-results.go -in $(LOCAL_RESULTS_DIR)/$(MASTER_NODE) -out $(LOCAL_RESULTS_DIR)/plots
