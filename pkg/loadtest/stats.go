@@ -264,6 +264,18 @@ func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHisto
 	}
 }
 
+// FlattenResponseTimeHistogram will take the given histogram object and convert
+// it into two flattened arrays, where the first returned array will be the bins
+// and the second will be the counts.
+func FlattenResponseTimeHistogram(h *messages.ResponseTimeHistogram) ([]int64, []int64) {
+	bins, counts := make([]int64, 0), make([]int64, 0)
+	for bin := int64(0); bin < h.Timeout; bin += h.BinSize {
+		bins = append(bins, bin)
+		counts = append(counts, h.TimeBins[bin])
+	}
+	return bins, counts
+}
+
 // WriteSummaryStats will write the given summary statistics using the specified
 // CSV writer.
 func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) error {
