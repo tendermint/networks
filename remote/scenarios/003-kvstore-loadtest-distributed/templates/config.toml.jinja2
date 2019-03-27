@@ -25,12 +25,6 @@ master = "{{ slave.master }}"
 [test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = {{ test_network.enable_prometheus }}
-
-# Defaults for RPC and Prometheus ports on the targets (these can be overridden
-# in each target's section below).
-rpc_port = {{ test_network.rpc_port }}
-prometheus_port = {{ test_network.prometheus_port }}
-
 # How often to poll the Prometheus endpoint for each host
 prometheus_poll_interval = "{{ test_network.prometheus_poll_interval }}"
 # At what point do we consider a Prometheus polling operation a failure?
@@ -38,8 +32,8 @@ prometheus_poll_timeout = "{{ test_network.prometheus_poll_timeout }}"
 
     {% for target in test_network.targets %}[[test_network.targets]]
     id = "{{ target.id }}"
-    host = "{{ target.host }}"
-    prometheus_host = "{{ target.prometheus_host }}"
+    url = "{{ target.url }}"
+    prometheus_urls = "{{ target.prometheus_urls }}"
 
     {% endfor %}
 
