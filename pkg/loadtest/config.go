@@ -4,7 +4,6 @@ import (
 	"encoding"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -36,10 +35,7 @@ type SlaveConfig struct {
 
 // TestNetworkConfig encapsulates information about the network under test.
 type TestNetworkConfig struct {
-	RPCPort int `toml:"rpc_port"` // The default Tendermint RPC port.
-
 	EnablePrometheus       bool              `toml:"enable_prometheus"`        // Should we enable collections of Prometheus stats during testing?
-	PrometheusPort         int               `toml:"prometheus_port"`          // The default Prometheus port.
 	PrometheusPollInterval ParseableDuration `toml:"prometheus_poll_interval"` // How often should we poll the Prometheus endpoint?
 	PrometheusPollTimeout  ParseableDuration `toml:"prometheus_poll_timeout"`  // At what point do we consider a Prometheus polling operation a failure?
 
@@ -49,13 +45,11 @@ type TestNetworkConfig struct {
 // TestNetworkTargetConfig encapsulates the configuration for each node in the
 // Tendermint test network.
 type TestNetworkTargetConfig struct {
-	ID   string `toml:"id"`   // A short, descriptive identifier for this node.
-	Host string `toml:"host"` // The host address for this node.
+	ID             string `toml:"id"`                        // A short, descriptive identifier for this node.
+	URL            string `toml:"url"`                       // The RPC URL for this target node.
+	PrometheusURLs string `toml:"prometheus_urls,omitempty"` // The URL(s) (comma-separated) to poll for this target node, if Prometheus polling is enabled.
 
-	RPCPort        int    `toml:"rpc_port,omitempty"`        // Override for the default Tendermint RPC port for this node.
-	PrometheusHost string `toml:"prometheus_host,omitempty"` // Override the host address for the Prometheus endpoint (useful for using internal IPs).
-	PrometheusPort int    `toml:"prometheus_port,omitempty"` // Override for the default Prometheus port for this node.
-	Outages        string `toml:"outages,omitempty"`         // Specify an outage schedule to try to affect for this host.
+	Outages string `toml:"outages,omitempty"` // Specify an outage schedule to try to affect for this host.
 }
 
 // ClientConfig contains the configuration for clients being spawned on slaves.
@@ -163,12 +157,6 @@ func (s *SlaveConfig) Validate() error {
 //
 
 func (c *TestNetworkConfig) Validate() error {
-	if c.PrometheusPort < 1 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network prometheus port is invalid: %d", c.PrometheusPort))
-	}
-	if c.RPCPort < 1 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network RPC port is invalid: %d", c.RPCPort))
-	}
 	if len(c.Targets) == 0 {
 		return NewError(ErrInvalidConfig, nil, "test network must have at least one target (found 0)")
 	}
@@ -180,22 +168,12 @@ func (c *TestNetworkConfig) Validate() error {
 	return nil
 }
 
-// RandomTarget allows us to pick a Tendermint node at random from the test
-// network configuration.
-func (c *TestNetworkConfig) RandomTarget() *TestNetworkTargetConfig {
-	return &c.Targets[int(rand.Int31())%len(c.Targets)]
-}
-
 // GetTargetRPCURLs will return a simple, flattened list of URLs for all of the
 // target nodes' RPC addresses.
 func (c *TestNetworkConfig) GetTargetRPCURLs() []string {
 	urls := make([]string, 0)
 	for _, target := range c.Targets {
-		rpcPort := target.RPCPort
-		if rpcPort == 0 {
-			rpcPort = c.RPCPort
-		}
-		urls = append(urls, fmt.Sprintf("%s:%d", target.Host, rpcPort))
+		urls = append(urls, target.URL)
 	}
 	return urls
 }
@@ -208,22 +186,17 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 	if len(c.ID) == 0 {
 		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing an ID", i))
 	}
-	if len(c.Host) == 0 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing a host address", i))
+	if len(c.URL) == 0 {
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing its RPC URL", i))
+	}
+	if len(c.PrometheusURLs) == 0 {
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing its Prometheus URL(s)", i))
 	}
 	return nil
 }
 
-func (c *TestNetworkTargetConfig) GetPrometheusURL(defaultPort int) string {
-	host := c.Host
-	if len(c.PrometheusHost) > 0 {
-		host = c.PrometheusHost
-	}
-	port := defaultPort
-	if c.PrometheusPort > 0 {
-		port = c.PrometheusPort
-	}
-	return fmt.Sprintf("http://%s:%d", host, port)
+func (c *TestNetworkTargetConfig) GetPrometheusURLs() []string {
+	return strings.Split(c.PrometheusURLs, ",")
 }
 
 //

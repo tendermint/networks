@@ -614,6 +614,18 @@ func GetNodePrometheusStats(c *http.Client, url string) (*NodePrometheusStats, e
 	return stats, nil
 }
 
+// Merge will incorporate the given `src` object's metric families' stats into
+// this one.
+func (s *NodePrometheusStats) Merge(src *NodePrometheusStats) {
+	for srcName, srcMF := range src.MetricFamilies {
+		// only merge if we haven't seen this metric family - don't update
+		// existing ones
+		if _, ok := s.MetricFamilies[srcName]; !ok {
+			s.MetricFamilies[srcName] = srcMF
+		}
+	}
+}
+
 //
 // PrometheusStats
 //
@@ -623,15 +635,25 @@ type nodePrometheusStats struct {
 	stats  *NodePrometheusStats
 }
 
-func collectPrometheusStats(c *http.Client, hostID, nodeURL string, statsc chan nodePrometheusStats, logger logging.Logger) {
-	stats, err := GetNodePrometheusStats(c, nodeURL)
-	if err == nil {
-		statsc <- nodePrometheusStats{
-			hostID: hostID,
-			stats:  stats,
+func collectPrometheusStats(c *http.Client, hostID string, nodeURLs []string, statsc chan nodePrometheusStats, logger logging.Logger) {
+	var resultStats *NodePrometheusStats
+
+	for _, nodeURL := range nodeURLs {
+		stats, err := GetNodePrometheusStats(c, nodeURL)
+		if err == nil {
+			if resultStats == nil {
+				resultStats = stats
+			} else {
+				resultStats.Merge(stats)
+			}
+		} else {
+			logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
 		}
-	} else {
-		logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
+	}
+
+	statsc <- nodePrometheusStats{
+		hostID: hostID,
+		stats:  resultStats,
 	}
 }
 
@@ -655,15 +677,15 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 		collectorShutdownc := make(chan bool, 1)
 		collectorsShutdownc = append(collectorsShutdownc, collectorShutdownc)
 		wg.Add(1)
-		go func(client *http.Client, hostID, nodeURL string, csc chan bool) {
-			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURL", nodeURL)
+		go func(client *http.Client, hostID string, nodeURLs []string, csc chan bool) {
+			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURLs", nodeURLs)
 			// fire off an initial request for stats (prior to first tick)
-			collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+			collectPrometheusStats(client, hostID, nodeURLs, statsc, logger)
 		collectorLoop:
 			for {
 				select {
 				case <-ticker.C:
-					collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+					collectPrometheusStats(client, hostID, nodeURLs, statsc, logger)
 
 				case <-csc:
 					logger.Debug("Shutting down collector goroutine", "hostID", hostID)
@@ -671,7 +693,7 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 				}
 			}
 			wg.Done()
-		}(c, node.ID, node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort), collectorShutdownc)
+		}(c, node.ID, node.GetPrometheusURLs(), collectorShutdownc)
 	}
 	logger.Debug("Prometheus collectors started")
 
@@ -679,7 +701,9 @@ collectorsLoop:
 	for {
 		select {
 		case nodeStats := <-statsc:
-			ps.TargetNodeStats[nodeStats.hostID] = append(ps.TargetNodeStats[nodeStats.hostID], nodeStats.stats)
+			if nodeStats.stats != nil {
+				ps.TargetNodeStats[nodeStats.hostID] = append(ps.TargetNodeStats[nodeStats.hostID], nodeStats.stats)
+			}
 
 		case <-shutdownc:
 			logger.Debug("Shutdown signal received by Prometheus collector loop")
@@ -701,11 +725,16 @@ collectorsLoop:
 	logger.Debug("Doing one final Prometheus stats collection from each node")
 	// do one final collection from each node
 	for i, node := range cfg.TestNetwork.Targets {
-		nodeStats, err := GetNodePrometheusStats(clients[i], node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort))
-		if err != nil {
-			logger.Error("Failed to fetch Prometheus statistics", "hostID", node.ID, "err", err)
-		} else {
-			ps.TargetNodeStats[node.ID] = append(ps.TargetNodeStats[node.ID], nodeStats)
+		finalStatsc := make(chan nodePrometheusStats, 1)
+		go collectPrometheusStats(clients[i], node.ID, node.GetPrometheusURLs(), finalStatsc, logger)
+		select {
+		case nodeStats := <-finalStatsc:
+			if nodeStats.stats != nil {
+				ps.TargetNodeStats[node.ID] = append(ps.TargetNodeStats[node.ID], nodeStats.stats)
+			}
+
+		case <-time.After(time.Duration(cfg.TestNetwork.PrometheusPollTimeout)):
+			logger.Error("Timed out waiting for final Prometheus polling operation to complete", "hostID", node.ID)
 		}
 	}
 
