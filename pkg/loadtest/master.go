@@ -92,6 +92,9 @@ func (m *Master) Receive(ctx actor.Context) {
 	case *messages.SlaveFailed:
 		m.slaveFailed(ctx, msg)
 
+	case *messages.LoadTestUnderway:
+		m.trackSlaveCheckin(ctx.Sender().GetId())
+
 	case *messages.SlaveFinished:
 		m.slaveFinished(ctx, msg)
 
@@ -213,6 +216,7 @@ func (m *Master) trackSlaveCheckin(slaveID string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	m.lastCheckin[slaveID] = time.Now()
+	m.logger.Debug("Tracking slave check-in", "slaveID", slaveID, "time", m.lastCheckin[slaveID])
 }
 
 func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
