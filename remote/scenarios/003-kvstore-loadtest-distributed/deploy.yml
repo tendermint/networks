@@ -33,15 +33,13 @@
     # test network configuration
     test_network:
       enable_prometheus: "true"
-      rpc_port: 26657
-      prometheus_port: 26660
       prometheus_poll_interval: "10s"
       prometheus_poll_timeout: "1s"
       targets:
-        - { id: "tik0", host: "tik0.sredev.co", prometheus_host: "172.31.7.28" }
-        - { id: "tik1", host: "tik1.sredev.co", prometheus_host: "172.31.1.213" }
-        - { id: "tik2", host: "tik2.sredev.co", prometheus_host: "172.31.6.31" }
-        - { id: "tik3", host: "tik3.sredev.co", prometheus_host: "172.31.15.61" }
+        - { id: "tik0", url: "http://tik0.sredev.co:26657", prometheus_urls: "http://172.31.7.28:26660" }
+        - { id: "tik1", url: "http://tik1.sredev.co:26657", prometheus_urls: "http://172.31.1.213:26660" }
+        - { id: "tik2", url: "http://tik2.sredev.co:26657", prometheus_urls: "http://172.31.6.31:26660" }
+        - { id: "tik3", url: "http://tik3.sredev.co:26657", prometheus_urls: "http://172.31.15.61:26660" }
     # client configuration
     clients:
       type: "tmrpc"
