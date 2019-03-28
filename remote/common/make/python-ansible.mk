@@ -1,4 +1,4 @@
-ACTIVATE_VENV := source venv/bin/activate
+ACTIVATE_VENV := . venv/bin/activate
 .PHONY: update_deps
 
 venv:
