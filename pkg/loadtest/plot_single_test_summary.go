@@ -92,7 +92,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 
 				<tr>
 					<td>Test run time</td>
-					<td>{{.AbsTotalTime}}</td>
+					<td>{{.TotalTestTime}}</td>
 					<td>
 						<i class="fas fa-info-circle" title="The total time (from the master's perspective) in which the load testing completed"></i>
 					</td>
@@ -309,7 +309,7 @@ type SingleTestSummaryContext struct {
 	ClientRequestWaitMax  template.HTML
 	ClientRequestTimeout  template.HTML
 	ClientMaxInteractions template.HTML
-	AbsTotalTime          template.HTML
+	TotalTestTime         template.HTML
 
 	// Interaction-related parameters
 	InteractionsTotalClients template.HTML
@@ -347,7 +347,7 @@ type SingleTestSummaryRequestParams struct {
 // NewSingleTestSummaryContext creates the relevant context to be able to render
 // the single load test plot.
 func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats) SingleTestSummaryContext {
-	icstats := CalculateStats(stats.Interactions)
+	icstats := CalculateStats(stats.Interactions, stats.TotalTestTime)
 	// flatten the interaction response time histogram
 	ibins, icounts := FlattenResponseTimeHistogram(stats.Interactions.ResponseTimes, "				")
 	return SingleTestSummaryContext{
@@ -359,30 +359,30 @@ func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats) Sin
 		ClientRequestWaitMax:  template.HTML(fmt.Sprintf("%.0fms", float64(time.Duration(cfg.Clients.RequestWaitMax))/float64(time.Millisecond))),
 		ClientRequestTimeout:  template.HTML(fmt.Sprintf("%.0fms", float64(time.Duration(cfg.Clients.RequestTimeout))/float64(time.Millisecond))),
 		ClientMaxInteractions: template.HTML(fmt.Sprintf("%d", cfg.Clients.MaxInteractions)),
-		AbsTotalTime:          template.HTML(fmt.Sprintf("%.2fs", float64(stats.Interactions.AbsTotalTime)/float64(time.Second))),
+		TotalTestTime:         template.HTML(fmt.Sprintf("%.2fs", float64(stats.TotalTestTime)/float64(time.Second))),
 
 		InteractionsTotalClients: template.HTML(fmt.Sprintf("%d", stats.Interactions.TotalClients)),
 		InteractionsPerSec:       template.HTML(fmt.Sprintf("%.2f", icstats.AbsPerSec)),
 		InteractionsCount:        template.HTML(fmt.Sprintf("%d", stats.Interactions.Count)),
 		InteractionsErrors:       template.HTML(fmt.Sprintf("%d", stats.Interactions.Errors)),
-		InteractionsErrorRate:    template.HTML(fmt.Sprintf("%.2f", icstats.FailureRate)),
+		InteractionsErrorRate:    template.HTML(fmt.Sprintf("%.2f%%", icstats.FailureRate)),
 		InteractionsMinTime:      template.HTML(fmt.Sprintf("%.1fms", float64(time.Duration(stats.Interactions.MinTime))/float64(time.Millisecond))),
 		InteractionsMaxTime:      template.HTML(fmt.Sprintf("%.1fms", float64(time.Duration(stats.Interactions.MaxTime))/float64(time.Millisecond))),
 
 		InteractionsResponseTimesBins:   template.JS(ibins),
 		InteractionsResponseTimesCounts: template.JS(icounts),
 
-		Requests: buildRequestsCtx(stats.Requests),
+		Requests: buildRequestsCtx(stats.Requests, stats.TotalTestTime),
 	}
 }
 
-func buildRequestsCtx(stats map[string]*messages.SummaryStats) []SingleTestSummaryRequestParams {
+func buildRequestsCtx(stats map[string]*messages.SummaryStats, totalTestTime int64) []SingleTestSummaryRequestParams {
 	result := make([]SingleTestSummaryRequestParams, 0)
 	reqNames := make([]string, 0)
 	rcstats := make(map[string]*CalculatedStats)
 	for reqName, reqStats := range stats {
 		reqNames = append(reqNames, reqName)
-		rcstats[reqName] = CalculateStats(reqStats)
+		rcstats[reqName] = CalculateStats(reqStats, totalTestTime)
 	}
 	// now sort the request names alphabetically
 	sort.SliceStable(reqNames[:], func(i, j int) bool {
@@ -395,7 +395,7 @@ func buildRequestsCtx(stats map[string]*messages.SummaryStats) []SingleTestSumma
 			PerSec:              template.HTML(fmt.Sprintf("%.2f", rcstats[reqName].AbsPerSec)),
 			Count:               template.HTML(fmt.Sprintf("%d", stats[reqName].Count)),
 			Errors:              template.HTML(fmt.Sprintf("%d", stats[reqName].Errors)),
-			ErrorRate:           template.HTML(fmt.Sprintf("%.2f", rcstats[reqName].FailureRate)),
+			ErrorRate:           template.HTML(fmt.Sprintf("%.2f%%", rcstats[reqName].FailureRate)),
 			MinTime:             template.HTML(fmt.Sprintf("%.1fms", float64(stats[reqName].MinTime)/float64(time.Millisecond))),
 			MaxTime:             template.HTML(fmt.Sprintf("%.1fms", float64(stats[reqName].MaxTime)/float64(time.Millisecond))),
 			ResponseTimesBins:   template.JS(rbins),

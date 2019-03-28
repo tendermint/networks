@@ -60,14 +60,6 @@ type NodePrometheusStats struct {
 	MetricFamilies map[string]*pdto.MetricFamily
 }
 
-// MasterStats encapsulates all statistics relevant to a master node.
-type MasterStats struct {
-	Combined   *messages.CombinedStats // Interaction/request-derived statistics
-	Prometheus *PrometheusStats        // Stats from Prometheus endpoints
-
-	LoadTestStartTime time.Time // At what time did we start the load testing?
-}
-
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
 func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.SummaryStats {
 	return &messages.SummaryStats{
@@ -127,7 +119,6 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 	dest.Count += src.Count
 	dest.Errors += src.Errors
 	dest.TotalTime += src.TotalTime
-	dest.AbsTotalTime += src.AbsTotalTime
 	dest.TotalClients += src.TotalClients
 
 	if src.MinTime < dest.MinTime {
@@ -157,7 +148,9 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 // MergeCombinedStats will merge the given src CombinedStats object's contents
 // into the dest object.
 func MergeCombinedStats(dest, src *messages.CombinedStats) {
-	dest.TotalInteractionTime += src.TotalInteractionTime
+	if src.TotalTestTime > dest.TotalTestTime {
+		dest.TotalTestTime = src.TotalTestTime
+	}
 	MergeSummaryStats(dest.Interactions, src.Interactions)
 	for srcReqName, srcReqStats := range src.Requests {
 		MergeSummaryStats(dest.Requests[srcReqName], srcReqStats)
@@ -175,7 +168,7 @@ func FlattenedSortedErrors(stats *messages.SummaryStats) []*FlattenedError {
 	return errorsByType
 }
 
-func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
+func CalculateStats(stats *messages.SummaryStats, totalTestTime int64) *CalculatedStats {
 	// average total time for all cumulative interactions/requests per client
 	avgTotalClientTime := math.Round(float64(stats.TotalTime) / float64(stats.TotalClients))
 	// number of interactions/requests per client
@@ -193,8 +186,8 @@ func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
 	// interactions/requests per second overall
 	perSec := perSecPerClient * float64(stats.TotalClients)
 	absPerSec := float64(0)
-	if stats.AbsTotalTime > 0 {
-		absPerSec = float64(stats.Count) / time.Duration(stats.AbsTotalTime).Seconds()
+	if totalTestTime > 0 {
+		absPerSec = float64(stats.Count) / time.Duration(totalTestTime).Seconds()
 	}
 	return &CalculatedStats{
 		AvgTotalClientTime: avgTotalClientTime,
@@ -211,8 +204,8 @@ func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
 // LogSummaryStats is a utility function for displaying summary statistics
 // through the logging interface. This is useful when working with tm-load-test
 // from the command line.
-func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.SummaryStats) {
-	cs := CalculateStats(stats)
+func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.SummaryStats, totalTestTime int64) {
+	cs := CalculateStats(stats, totalTestTime)
 
 	logger.Info(logPrefix+" total clients", "value", stats.TotalClients)
 	logger.Info(logPrefix+" per second per client", "value", fmt.Sprintf("%.2f", cs.PerSecPerClient))
@@ -234,13 +227,13 @@ func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.Su
 func LogStats(logger logging.Logger, stats *messages.CombinedStats) {
 	logger.Info("")
 	logger.Info("INTERACTION STATISTICS")
-	LogSummaryStats(logger, "Interactions", stats.Interactions)
+	LogSummaryStats(logger, "Interactions", stats.Interactions, stats.TotalTestTime)
 
 	logger.Info("")
 	logger.Info("REQUEST STATISTICS")
 	for reqName, reqStats := range stats.Requests {
 		logger.Info(reqName)
-		LogSummaryStats(logger, "  Requests", reqStats)
+		LogSummaryStats(logger, "  Requests", reqStats, stats.TotalTestTime)
 		logger.Info("")
 	}
 }
@@ -287,14 +280,14 @@ func FlattenResponseTimeHistogram(h *messages.ResponseTimeHistogram, indent stri
 
 // WriteSummaryStats will write the given summary statistics using the specified
 // CSV writer.
-func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) error {
-	cs := CalculateStats(stats)
+func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats, totalTestTime int64) error {
+	cs := CalculateStats(stats, totalTestTime)
 	indent := strings.Repeat(" ", indentCount)
 	prefix := indent + linePrefix
 	if err := writer.Write([]string{prefix + " total time", (time.Duration(stats.TotalTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
-	if err := writer.Write([]string{prefix + " total time (absolute)", (time.Duration(stats.AbsTotalTime) * time.Nanosecond).String()}); err != nil {
+	if err := writer.Write([]string{prefix + " total time (absolute)", (time.Duration(totalTestTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)}); err != nil {
@@ -354,7 +347,8 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 // NOTE: Only a single `*messages.SummaryStats` object will be parsed from the
 // given set of rows. The moment one full object has been parsed, the function
 // will return.
-func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
+func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, int64, error) {
+	totalTestTime := int64(0)
 	curRow, rowCount := 0, len(rows)
 	parseNextVal := func() (string, string, error) {
 		defer func() { curRow++ }()
@@ -372,6 +366,9 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 			return "", 0, err
 		}
 		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return "", 0, fmt.Errorf("%s -> %s", desc, err)
+		}
 		return desc, i, err
 	}
 	parseDuration := func() (string, int64, error) {
@@ -391,15 +388,16 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 
 	_, stats.TotalTime, err = parseDuration()
 	if err != nil {
-		return nil, curRow, err
+		return nil, curRow, 0, err
 	}
-	_, stats.AbsTotalTime, err = parseDuration()
+	// skip the absolute total test time field here
+	_, totalTestTime, err = parseDuration()
 	if err != nil {
-		return nil, curRow, err
+		return nil, curRow, 0, err
 	}
 	_, stats.TotalClients, err = parseInt()
 	if err != nil {
-		return nil, curRow, err
+		return nil, curRow, 0, err
 	}
 
 	// skip the computed rows
@@ -407,11 +405,11 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 
 	_, stats.Count, err = parseInt()
 	if err != nil {
-		return nil, curRow, err
+		return nil, curRow, 0, err
 	}
 	_, stats.Errors, err = parseInt()
 	if err != nil {
-		return nil, curRow, err
+		return nil, curRow, 0, err
 	}
 
 	// skip the failure rate % row
@@ -419,11 +417,11 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 
 	_, stats.MinTime, err = parseDuration()
 	if err != nil {
-		return nil, curRow, fmt.Errorf("Failed to parse min time field: %s", err)
+		return nil, curRow, 0, fmt.Errorf("Failed to parse min time field: %s", err)
 	}
 	_, stats.MaxTime, err = parseDuration()
 	if err != nil {
-		return nil, curRow, fmt.Errorf("Failed to parse max time field: %s", err)
+		return nil, curRow, 0, fmt.Errorf("Failed to parse max time field: %s", err)
 	}
 
 	// read the top errors
@@ -432,14 +430,14 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 	curRow++
 	for curRow < rowCount {
 		if len(rows[curRow]) == 0 {
-			return nil, curRow, fmt.Errorf("Missing rows in CSV data")
+			return nil, curRow, 0, fmt.Errorf("Missing rows in CSV data")
 		}
 		if strings.Contains(rows[curRow][0], "response time histogram") {
 			break
 		}
 		desc, count, err := parseInt()
 		if err != nil {
-			return nil, curRow, err
+			return nil, curRow, 0, err
 		}
 		stats.ErrorsByType[desc] = count
 	}
@@ -456,12 +454,12 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 		}
 		binLabel, count, err := parseInt()
 		if err != nil {
-			return nil, curRow, err
+			return nil, curRow, 0, err
 		}
 		prevBin = curBin
 		curBin, err = strconv.ParseInt(strings.Trim(binLabel, " "), 10, 64)
 		if err != nil {
-			return nil, curRow, err
+			return nil, curRow, 0, err
 		}
 		// convert to nanoseconds
 		curBin = (time.Duration(curBin) * time.Millisecond).Nanoseconds()
@@ -472,7 +470,7 @@ func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, error) {
 	stats.ResponseTimes.BinCount = int64(len(stats.ResponseTimes.TimeBins))
 	stats.ResponseTimes.BinSize = curBin - prevBin
 
-	return stats, curRow, nil
+	return stats, curRow, totalTestTime, nil
 }
 
 // WriteCombinedStats will write the given combined statistics using the
@@ -484,7 +482,7 @@ func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 	if err := cw.Write([]string{"INTERACTION STATISTICS", ""}); err != nil {
 		return err
 	}
-	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions); err != nil {
+	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions, stats.TotalTestTime); err != nil {
 		return err
 	}
 
@@ -504,7 +502,7 @@ func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 		if err := cw.Write([]string{reqName, ""}); err != nil {
 			return err
 		}
-		if err := WriteSummaryStats(cw, 2, "Requests", reqStats); err != nil {
+		if err := WriteSummaryStats(cw, 2, "Requests", reqStats, stats.TotalTestTime); err != nil {
 			return err
 		}
 		i++
@@ -524,6 +522,7 @@ func isEmptyCSVRow(row []string) bool {
 // ReadCombinedStats will attempt to read a CombinedStats object from the given
 // reader, assuming it's in CSV format, or return an error.
 func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
+	totalTestTime := int64(0)
 	cr := csv.NewReader(r)
 	curRow := 0
 	// read all the data
@@ -533,7 +532,7 @@ func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
 	}
 	// skip the "INTERACTION STATISTICS" heading
 	curRow++
-	istats, rowsRead, err := ParseSummaryStats(rows[curRow:])
+	istats, rowsRead, totalTestTime, err := ParseSummaryStats(rows[curRow:])
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +547,7 @@ func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
 		// read the request name from this row
 		reqName := rows[curRow][0]
 		curRow++
-		curStats, rowsRead, err := ParseSummaryStats(rows[curRow:])
+		curStats, rowsRead, _, err := ParseSummaryStats(rows[curRow:])
 		if err != nil {
 			return nil, err
 		}
@@ -559,7 +558,11 @@ func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
 			curRow++
 		}
 	}
-	return &messages.CombinedStats{Interactions: istats, Requests: rstats}, nil
+	return &messages.CombinedStats{
+		TotalTestTime: totalTestTime,
+		Interactions:  istats,
+		Requests:      rstats,
+	}, nil
 }
 
 // WriteCombinedStatsToFile will write the given stats object to the specified
@@ -834,36 +837,4 @@ func (ps *PrometheusStats) Dump(outputPath string) error {
 		}
 	}
 	return nil
-}
-
-//
-// MasterStats
-//
-
-// NewMasterStats instantiates a new `MasterStats` object for use in tracking
-// statistics related to the master node.
-func NewMasterStats(cfg *Config) *MasterStats {
-	return &MasterStats{
-		Combined: GetClientFactory(cfg.Clients.Type).NewStats(ClientParams{
-			TargetNodes:        cfg.TestNetwork.GetTargetRPCURLs(),
-			InteractionTimeout: time.Duration(cfg.Clients.InteractionTimeout),
-			RequestTimeout:     time.Duration(cfg.Clients.RequestTimeout),
-			RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
-			RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
-		}),
-		Prometheus: &PrometheusStats{
-			TargetNodeStats: make(map[string][]*NodePrometheusStats),
-		},
-	}
-}
-
-// UpdateAbsTotalTime will update the absolute total time that the test has been
-// running, from the master's perspective. This aids in computing *absolute*
-// requests or interactions per second.
-func (s *MasterStats) UpdateAbsTotalTime(t time.Duration) {
-	n := t.Nanoseconds()
-	s.Combined.Interactions.AbsTotalTime = n
-	for _, reqStats := range s.Combined.Requests {
-		reqStats.AbsTotalTime = n
-	}
 }

@@ -22,8 +22,9 @@ type Master struct {
 
 	slaves *actor.PIDSet
 
-	stats *MasterStats // For keeping track of all stats relevant to the master
-	mtx   *sync.Mutex
+	loadTestStartTime time.Time               // Helps with calculating overall load testing time for absolute statistics
+	istats            *messages.CombinedStats // For keeping track of interaction and request-related statistics
+	pstats            *PrometheusStats        // For keeping track of stats from Prometheus
 
 	lastCheckin            map[string]time.Time // The last time we received a "load testing underway" message from each slave (ID -> last checkin time)
 	checkinTicker          *time.Ticker
@@ -31,6 +32,8 @@ type Master struct {
 
 	statsShutdownc chan bool
 	statsDonec     chan bool
+
+	mtx *sync.Mutex
 }
 
 // Master implements actor.Actor
@@ -44,11 +47,20 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 	ctx := actor.EmptyRootContext
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return &Master{
-			cfg:                    cfg,
-			probe:                  probe,
-			logger:                 logging.NewLogrusLogger("master"),
-			slaves:                 actor.NewPIDSet(),
-			stats:                  NewMasterStats(cfg),
+			cfg:    cfg,
+			probe:  probe,
+			logger: logging.NewLogrusLogger("master"),
+			slaves: actor.NewPIDSet(),
+			istats: GetClientFactory(cfg.Clients.Type).NewStats(ClientParams{
+				TargetNodes:        cfg.TestNetwork.GetTargetRPCURLs(),
+				InteractionTimeout: time.Duration(cfg.Clients.InteractionTimeout),
+				RequestTimeout:     time.Duration(cfg.Clients.RequestTimeout),
+				RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
+				RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
+			}),
+			pstats: &PrometheusStats{
+				TargetNodeStats: make(map[string][]*NodePrometheusStats),
+			},
 			lastCheckin:            make(map[string]time.Time),
 			checkinTicker:          nil,
 			stopSlaveHealthChecker: make(chan bool, 1),
@@ -104,7 +116,7 @@ func (m *Master) onStartup(ctx actor.Context) {
 	}(ctx)
 	// fire up our Prometheus collector routine
 	go func() {
-		m.stats.Prometheus.RunCollectors(m.cfg, m.statsShutdownc, m.statsDonec, m.logger)
+		m.pstats.RunCollectors(m.cfg, m.statsShutdownc, m.statsDonec, m.logger)
 	}()
 	if m.probe != nil {
 		m.probe.OnStartup(ctx)
@@ -163,7 +175,7 @@ func (m *Master) startLoadTest(ctx actor.Context) {
 
 	// track the start time for the load test
 	m.mtx.Lock()
-	m.stats.LoadTestStartTime = time.Now()
+	m.loadTestStartTime = time.Now()
 	m.mtx.Unlock()
 
 	go m.slaveHealthChecker(ctx)
@@ -241,8 +253,16 @@ func (m *Master) slaveFinished(ctx actor.Context, msg *messages.SlaveFinished) {
 	// if we've heard from all the slaves we accepted
 	if m.slaves.Len() == 0 {
 		m.logger.Info("All slaves successfully completed their load testing")
+		m.trackTestEndTime()
 		m.shutdown(ctx, nil)
 	}
+}
+
+func (m *Master) trackTestEndTime() {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.istats.TotalTestTime = time.Since(m.loadTestStartTime).Nanoseconds()
+	m.logger.Debug("Tracking total test duration", "TotalTestTime", m.istats.TotalTestTime)
 }
 
 func (m *Master) kill(ctx actor.Context) {
@@ -279,7 +299,7 @@ func (m *Master) shutdown(ctx actor.Context, err error) {
 
 func (m *Master) updateStats(stats *messages.CombinedStats) {
 	m.mtx.Lock()
-	MergeCombinedStats(m.stats.Combined, stats)
+	MergeCombinedStats(m.istats, stats)
 	m.mtx.Unlock()
 }
 
@@ -287,13 +307,12 @@ func (m *Master) writeStats() {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	LogStats(logging.NewLogrusLogger(""), m.stats.Combined)
+	LogStats(logging.NewLogrusLogger(""), m.istats)
 	filename := path.Join(m.cfg.Master.ResultsDir, "summary.csv")
-	m.stats.UpdateAbsTotalTime(time.Since(m.stats.LoadTestStartTime))
-	if err := WriteCombinedStatsToFile(filename, m.stats.Combined); err != nil {
+	if err := WriteCombinedStatsToFile(filename, m.istats); err != nil {
 		m.logger.Error("Failed to write final statistics to output CSV file", "filename", filename)
 	}
-	if err := m.stats.Prometheus.Dump(m.cfg.Master.ResultsDir); err != nil {
+	if err := m.pstats.Dump(m.cfg.Master.ResultsDir); err != nil {
 		m.logger.Error("Failed to write Prometheus stats to output directory", "err", err)
 	}
 }

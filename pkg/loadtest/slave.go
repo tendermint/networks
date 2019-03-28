@@ -196,10 +196,10 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 	}
 	s.logger.Info("All clients spawned - waiting for load testing to complete")
 	wg.Wait()
-	totalInteractionTime := time.Since(startTime)
+	totalTestTime := time.Since(startTime)
 	// get the combined stats from the stats counter goroutine
 	finalStats := <-finalStatsc
-	finalStats.TotalInteractionTime = int64(totalInteractionTime / time.Nanosecond)
+	finalStats.TotalTestTime = totalTestTime.Nanoseconds()
 	s.logger.Info("Load testing complete")
 	LogStats(logging.NewLogrusLogger(""), finalStats)
 	// inform the slave about the final statistics
