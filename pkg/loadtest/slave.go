@@ -231,14 +231,11 @@ func (s *Slave) spawnClientStatsReceiver(clientParams ClientParams, expectedTota
 		overallStats := s.clientFactory.NewStats(clientParams)
 		statsReceived := int64(0)
 	loop:
-		for {
-			select {
-			case clientStats := <-statsc:
-				MergeCombinedStats(overallStats, clientStats)
-				statsReceived++
-				if statsReceived >= expectedTotalClients {
-					break loop
-				}
+		for clientStats := range statsc {
+			MergeCombinedStats(overallStats, clientStats)
+			statsReceived++
+			if statsReceived >= expectedTotalClients {
+				break loop
 			}
 		}
 		// submit the overall stats for counting

@@ -348,7 +348,7 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 // given set of rows. The moment one full object has been parsed, the function
 // will return.
 func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, int64, error) {
-	totalTestTime := int64(0)
+	var totalTestTime int64
 	curRow, rowCount := 0, len(rows)
 	parseNextVal := func() (string, string, error) {
 		defer func() { curRow++ }()
@@ -522,7 +522,7 @@ func isEmptyCSVRow(row []string) bool {
 // ReadCombinedStats will attempt to read a CombinedStats object from the given
 // reader, assuming it's in CSV format, or return an error.
 func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
-	totalTestTime := int64(0)
+	var totalTestTime int64
 	cr := csv.NewReader(r)
 	curRow := 0
 	// read all the data
