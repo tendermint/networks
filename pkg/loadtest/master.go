@@ -254,7 +254,12 @@ func (m *Master) slaveFinished(ctx actor.Context, msg *messages.SlaveFinished) {
 	if m.slaves.Len() == 0 {
 		m.logger.Info("All slaves successfully completed their load testing")
 		m.trackTestEndTime()
-		m.shutdown(ctx, nil)
+		if err := m.sanityCheckStats(); err != nil {
+			m.logger.Error("Statistics sanity check failed", "err", err)
+			m.shutdown(ctx, err)
+		} else {
+			m.shutdown(ctx, nil)
+		}
 	}
 }
 
@@ -301,6 +306,31 @@ func (m *Master) updateStats(stats *messages.CombinedStats) {
 	m.mtx.Lock()
 	MergeCombinedStats(m.istats, stats)
 	m.mtx.Unlock()
+}
+
+func (m *Master) sanityCheckStats() error {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	expectedClients := m.cfg.Master.ExpectSlaves * m.cfg.Clients.Spawn
+	if m.istats.Interactions.TotalClients != int64(expectedClients) {
+		return NewError(
+			ErrStatsSanityCheckFailed,
+			nil,
+			fmt.Sprintf("Expected total clients to be %d, but was %d", expectedClients, m.istats.Interactions.TotalClients),
+		)
+	}
+
+	expectedInteractions := expectedClients * m.cfg.Clients.MaxInteractions
+	if m.istats.Interactions.Count != int64(expectedInteractions) {
+		return NewError(
+			ErrStatsSanityCheckFailed,
+			nil,
+			fmt.Sprintf("Expected total interactions to be %d, but was %d", expectedInteractions, m.istats.Interactions.Count),
+		)
+	}
+
+	return nil
 }
 
 func (m *Master) writeStats() {

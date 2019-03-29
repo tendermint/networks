@@ -169,13 +169,13 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 		RequestWaitMin:     time.Duration(s.cfg.Clients.RequestWaitMin),
 		RequestWaitMax:     time.Duration(s.cfg.Clients.RequestWaitMax),
 		RequestTimeout:     time.Duration(s.cfg.Clients.RequestTimeout),
+		TotalClients:       0, // we set this to 0 because we have 0 clients initially
 	}
 	wg := &sync.WaitGroup{}
 	s.logger.Info("Starting client spawning", "desiredCount", s.cfg.Clients.Spawn)
 	statsc := make(chan *messages.CombinedStats, 100)
 	finalStatsc := make(chan *messages.CombinedStats, 1)
-	expectedClientsc := make(chan int, 100)
-	s.spawnStatsCounter(clientParams, statsc, finalStatsc, expectedClientsc)
+	s.spawnClientStatsReceiver(clientParams, int64(s.cfg.Clients.Spawn), statsc, finalStatsc)
 
 	startTime := time.Now()
 	for totalCount := 0; totalCount < s.cfg.Clients.Spawn; {
@@ -188,7 +188,6 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 			}
 			s.spawnClient(wg, clientParams, statsc)
 			spawned++
-			expectedClientsc <- (spawned + totalCount)
 		}
 		totalCount += spawned
 		s.logger.Info("Spawned clients", "totalCount", totalCount)
@@ -227,23 +226,17 @@ func (s *Slave) spawnClient(wg *sync.WaitGroup, clientParams ClientParams, stats
 	}()
 }
 
-func (s *Slave) spawnStatsCounter(clientParams ClientParams, statsc, finalStatsc chan *messages.CombinedStats, expectedClientsc chan int) {
+func (s *Slave) spawnClientStatsReceiver(clientParams ClientParams, expectedTotalClients int64, statsc, finalStatsc chan *messages.CombinedStats) {
 	go func() {
 		overallStats := s.clientFactory.NewStats(clientParams)
-		expectedClients := 0
-		statsReceived := 0
+		statsReceived := int64(0)
 	loop:
 		for {
 			select {
-			case c := <-expectedClientsc:
-				if c > expectedClients {
-					expectedClients = c
-				}
-
 			case clientStats := <-statsc:
 				MergeCombinedStats(overallStats, clientStats)
 				statsReceived++
-				if statsReceived >= expectedClients {
+				if statsReceived >= expectedTotalClients {
 					break loop
 				}
 			}

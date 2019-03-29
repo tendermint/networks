@@ -17,6 +17,7 @@ const (
 	ErrSlaveFailed
 	ErrMasterFailed
 	ErrKilled
+	ErrStatsSanityCheckFailed
 )
 
 // Error is a way of wrapping the meaningful exit code we want to provide on
@@ -71,6 +72,8 @@ func ErrorMessageForCode(code ErrorCode, additionalInfo ...string) string {
 		result = "Master node failed"
 	case ErrKilled:
 		result = "Process killed"
+	case ErrStatsSanityCheckFailed:
+		result = "Statistics sanity check failed"
 	default:
 		return "Unrecognized error"
 	}
