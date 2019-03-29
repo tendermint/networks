@@ -15,27 +15,13 @@ UNAME_S?=$(shell uname -s)
 .PHONY: deploy fetch-tm-logs status
 
 deploy:
-	@if [ "${FAST_MODE}" == "false" ]; then \
-		if [ "${WITH_CLEVELDB}" == "true" ]; then \
-			if [ "${UNAME_S}" != "Linux" ]; then \
-				echo "ERROR: The cleveldb support can only be built from a Linux machine (yours is \"${UNAME_S}\")"; \
-				exit 1; \
-			fi; \
-			echo "Building Tendermint with cleveldb support..."; \
-			if [ "${INSTALL_TENDERMINT_LOCALLY}" == "true" ]; then \
-				CGO_LDFLAGS="-lsnappy" make -C $(TENDERMINT_SRC) install_c; \
-			fi; \
-			CGO_LDFLAGS="-lsnappy" make -C $(TENDERMINT_SRC) build_c; \
-		else \
-			echo "Building Tendermint..."; \
-			if [ "${INSTALL_TENDERMINT_LOCALLY}" == "true" ]; then \
-				make -C $(TENDERMINT_SRC) install; \
-			fi; \
-			make -C $(TENDERMINT_SRC) build-linux; \
-		fi; \
-		echo "Building load testing tools..."; \
-		make -C $(TM_NETWORKS_SRC) tools-linux; \
-	fi
+	@FAST_MODE=$(FAST_MODE) \
+		WITH_CLEVELDB=$(WITH_CLEVELDB) \
+		UNAME_S=$(UNAME_S) \
+		INSTALL_TENDERMINT_LOCALLY=$(INSTALL_TENDERMINT_LOCALLY) \
+		TENDERMINT_SRC=$(TENDERMINT_SRC) \
+		TM_NETWORKS_SRC=$(TM_NETWORKS_SRC) \
+		./scripts/build-executables.sh
 	@rm -rf /tmp/nodes/
 	@echo "Generating Tendermint configuration for ${VALIDATORS} validators..."
 	@tendermint testnet \

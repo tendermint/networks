@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # convert the Python "True" or "False" to "true" or "false"
 DEBUG_MODE=`echo ${DEBUG_MODE} | awk '{print tolower($0)}'`
 

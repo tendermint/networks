@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 NODE_DOMAIN=${NODE_DOMAIN:-"sredev.co"}
