@@ -243,6 +243,16 @@ func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
 	})
 }
 
+func fmtTimeLeft(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%02dh%02dm%02ds", h, m, s)
+}
+
 func (m *Master) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
 	m.updateSlaveInteractionCount(msg.Sender.Id, msg.InteractionCount)
 
@@ -250,10 +260,15 @@ func (m *Master) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
 		totalInteractions := m.totalSlaveInteractionCount()
 		completed := float64(100) * (float64(totalInteractions) / float64(m.expectedInteractions))
 		interactionsPerSec := float64(totalInteractions) / time.Since(m.loadTestStartTime).Seconds()
+		timeLeft := time.Duration(1000 * time.Hour)
+		if interactionsPerSec > 0 {
+			timeLeft = time.Duration((float64(m.expectedInteractions-totalInteractions) / interactionsPerSec) * float64(time.Second))
+		}
 		m.logger.Info(
 			"Progress update",
 			"completed", fmt.Sprintf("%.2f%%", completed),
 			"interactionsPerSec", fmt.Sprintf("%.2f", interactionsPerSec),
+			"approxTimeLeft", fmtTimeLeft(timeLeft),
 		)
 		m.progressUpdated()
 	}
