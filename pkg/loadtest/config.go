@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tendermint/networks/internal/logging"
+
 	"github.com/BurntSushi/toml"
 )
 
@@ -86,6 +88,8 @@ type ParseableDuration time.Duration
 
 // ParseableDuration implements encoding.TextUnmarshaler
 var _ encoding.TextUnmarshaler = (*ParseableDuration)(nil)
+
+var configLogger = logging.NewLogrusLogger("config")
 
 // ParseConfig will parse the configuration from the given string.
 func ParseConfig(data string) (*Config, error) {
@@ -244,6 +248,9 @@ func (c *ClientConfig) Validate() error {
 	}
 	if c.RequestTimeout <= 0 {
 		return NewError(ErrInvalidConfig, nil, "client request timeout cannot be 0")
+	}
+	if c.MaxTestTime > 0 {
+		configLogger.Info("WARNING: max_text_time parameter is not yet implemented")
 	}
 	return nil
 }
