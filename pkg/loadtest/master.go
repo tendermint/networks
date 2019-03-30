@@ -220,7 +220,6 @@ func (m *Master) checkSlaveHealth(ctx actor.Context) {
 			return
 		}
 	}
-	m.logger.Debug("All slaves still testing")
 }
 
 func (m *Master) masterFailed(ctx actor.Context, msg *messages.MasterFailed) {
@@ -248,8 +247,14 @@ func (m *Master) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
 	m.updateSlaveInteractionCount(msg.Sender.Id, msg.InteractionCount)
 
 	if m.dueForProgressUpdate() {
-		completed := float64(100) * (float64(m.totalSlaveInteractionCount()) / float64(m.expectedInteractions))
-		m.logger.Info("Progress update", "completed", fmt.Sprintf("%.2f%%", completed))
+		totalInteractions := m.totalSlaveInteractionCount()
+		completed := float64(100) * (float64(totalInteractions) / float64(m.expectedInteractions))
+		interactionsPerSec := float64(totalInteractions) / time.Since(m.loadTestStartTime).Seconds()
+		m.logger.Info(
+			"Progress update",
+			"completed", fmt.Sprintf("%.2f%%", completed),
+			"interactionsPerSec", fmt.Sprintf("%.2f", interactionsPerSec),
+		)
 		m.progressUpdated()
 	}
 }
