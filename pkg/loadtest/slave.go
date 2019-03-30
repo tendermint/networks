@@ -173,7 +173,7 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 	}
 	wg := &sync.WaitGroup{}
 	s.logger.Info("Starting client spawning", "desiredCount", s.cfg.Clients.Spawn)
-	statsc := make(chan *messages.CombinedStats, 100)
+	statsc := make(chan *messages.CombinedStats, s.cfg.Clients.Spawn)
 	finalStatsc := make(chan *messages.CombinedStats, 1)
 	s.spawnClientStatsReceiver(clientParams, int64(s.cfg.Clients.Spawn), statsc, finalStatsc)
 
