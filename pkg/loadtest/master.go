@@ -207,7 +207,10 @@ func (m *Master) checkSlaveHealth(ctx actor.Context) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	for slaveID, lastSeen := range m.lastCheckin {
+	// we're only interested in slaves that are still connected
+	for _, slave := range m.slaves.Values() {
+		slaveID := slave.Id
+		lastSeen := m.lastCheckin[slaveID]
 		if time.Since(lastSeen) >= DefaultMaxMissedHealthCheckPeriod {
 			m.logger.Error("Failed to see slave recently enough", "slaveID", slaveID, "lastSeen", lastSeen.String())
 			ctx.Send(ctx.Self(), &messages.MasterFailed{
