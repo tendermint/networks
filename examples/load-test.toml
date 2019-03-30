@@ -22,6 +22,11 @@ bind = "0.0.0.0:"
 # we still need an external address through which to access the master).
 master = "127.0.0.1:35000"
 
+# The interval at which stats updates will be sent to the master. Note that this
+# is approximate - due to the nature of the client interaction loop. Updates are
+# sent back to the master in a "best effort" fashion.
+update_interval = "30s"
+
 [test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = true

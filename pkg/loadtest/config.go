@@ -43,8 +43,9 @@ type MasterConfig struct {
 
 // SlaveConfig provides configuration specific to the load testing slaves.
 type SlaveConfig struct {
-	Bind   string `toml:"bind"`   // The address to which to bind slave nodes (host:port).
-	Master string `toml:"master"` // The master's external address (host:port).
+	Bind           string            `toml:"bind"`            // The address to which to bind slave nodes (host:port).
+	Master         string            `toml:"master"`          // The master's external address (host:port).
+	UpdateInterval ParseableDuration `toml:"update_interval"` // The interval with which to send stats updates to the master.
 }
 
 // TestNetworkConfig encapsulates information about the network under test.

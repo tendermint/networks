@@ -79,6 +79,9 @@ func (s *Slave) Receive(ctx actor.Context) {
 	case *messages.StartLoadTest:
 		s.startLoadTest(ctx)
 
+	case *messages.SlaveUpdate:
+		s.slaveUpdate(ctx, msg)
+
 	case *messages.SlaveFinished:
 		s.slaveFinished(ctx, msg)
 
@@ -174,8 +177,9 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 	wg := &sync.WaitGroup{}
 	s.logger.Info("Starting client spawning", "desiredCount", s.cfg.Clients.Spawn)
 	statsc := make(chan *messages.CombinedStats, s.cfg.Clients.Spawn)
+	updateStatsc := make(chan *messages.CombinedStats, s.cfg.Clients.Spawn)
 	finalStatsc := make(chan *messages.CombinedStats, 1)
-	s.spawnClientStatsReceiver(clientParams, int64(s.cfg.Clients.Spawn), statsc, finalStatsc)
+	s.spawnClientStatsReceiver(ctx, slavePID, clientParams, int64(s.cfg.Clients.Spawn), statsc, updateStatsc, finalStatsc)
 
 	startTime := time.Now()
 	for totalCount := 0; totalCount < s.cfg.Clients.Spawn; {
@@ -186,7 +190,7 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 			if (batchCount + totalCount) >= s.cfg.Clients.Spawn {
 				break batchLoop
 			}
-			s.spawnClient(wg, clientParams, statsc)
+			s.spawnClient(wg, clientParams, statsc, updateStatsc)
 			spawned++
 		}
 		totalCount += spawned
@@ -205,10 +209,11 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 	ctx.Send(slavePID, &messages.SlaveFinished{Sender: slavePID, Stats: finalStats})
 }
 
-func (s *Slave) spawnClient(wg *sync.WaitGroup, clientParams ClientParams, statsc chan *messages.CombinedStats) {
+func (s *Slave) spawnClient(wg *sync.WaitGroup, clientParams ClientParams, statsc, updateStatsc chan *messages.CombinedStats) {
 	wg.Add(1)
 	go func() {
 		c := s.clientFactory.NewClient(clientParams)
+		lastStatsUpdate := time.Now()
 		// execute our interactions from this client
 	interactionLoop:
 		for i := 0; i < s.cfg.Clients.MaxInteractions; i++ {
@@ -219,6 +224,11 @@ func (s *Slave) spawnClient(wg *sync.WaitGroup, clientParams ClientParams, stats
 					break interactionLoop
 				}
 			}
+
+			if time.Since(lastStatsUpdate) >= time.Duration(s.cfg.Slave.UpdateInterval) {
+				updateStatsc <- c.GetStats()
+				lastStatsUpdate = time.Now()
+			}
 		}
 		// submit the statistics for counting
 		statsc <- c.GetStats()
@@ -226,16 +236,27 @@ func (s *Slave) spawnClient(wg *sync.WaitGroup, clientParams ClientParams, stats
 	}()
 }
 
-func (s *Slave) spawnClientStatsReceiver(clientParams ClientParams, expectedTotalClients int64, statsc, finalStatsc chan *messages.CombinedStats) {
+func (s *Slave) spawnClientStatsReceiver(
+	ctx actor.Context,
+	slavePID *actor.PID,
+	clientParams ClientParams,
+	expectedTotalClients int64,
+	statsc, updateStatsc, finalStatsc chan *messages.CombinedStats) {
 	go func() {
 		overallStats := s.clientFactory.NewStats(clientParams)
 		statsReceived := int64(0)
 	loop:
-		for clientStats := range statsc {
-			MergeCombinedStats(overallStats, clientStats)
-			statsReceived++
-			if statsReceived >= expectedTotalClients {
-				break loop
+		for {
+			select {
+			case clientStats := <-statsc:
+				MergeCombinedStats(overallStats, clientStats)
+				statsReceived++
+				if statsReceived >= expectedTotalClients {
+					break loop
+				}
+
+			case updateStats := <-updateStatsc:
+				ctx.Send(slavePID, &messages.SlaveUpdate{Sender: slavePID, Stats: updateStats})
 			}
 		}
 		// submit the overall stats for counting
@@ -256,6 +277,11 @@ func (s *Slave) isShuttingDown() bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	return s.shuttingDown
+}
+
+func (s *Slave) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
+	s.logger.Info("Interactions completed", "count", msg.Stats.Interactions.Count)
+	ctx.Send(s.master, msg)
 }
 
 func (s *Slave) slaveFinished(ctx actor.Context, msg *messages.SlaveFinished) {

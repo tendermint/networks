@@ -22,9 +22,11 @@ type Master struct {
 
 	slaves *actor.PIDSet
 
-	loadTestStartTime time.Time               // Helps with calculating overall load testing time for absolute statistics
-	istats            *messages.CombinedStats // For keeping track of interaction and request-related statistics
-	pstats            *PrometheusStats        // For keeping track of stats from Prometheus
+	loadTestStartTime    time.Time               // Helps with calculating overall load testing time for absolute statistics
+	istats               *messages.CombinedStats // For keeping track of interaction and request-related statistics
+	pstats               *PrometheusStats        // For keeping track of stats from Prometheus
+	interactionCount     int64
+	expectedInteractions int64
 
 	lastCheckin            map[string]time.Time // The last time we received a "load testing underway" message from each slave (ID -> last checkin time)
 	checkinTicker          *time.Ticker
@@ -61,6 +63,8 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 			pstats: &PrometheusStats{
 				TargetNodeStats: make(map[string][]*NodePrometheusStats),
 			},
+			interactionCount:       int64(0),
+			expectedInteractions:   int64(cfg.Master.ExpectSlaves * cfg.Clients.Spawn * cfg.Clients.MaxInteractions),
 			lastCheckin:            make(map[string]time.Time),
 			checkinTicker:          nil,
 			stopSlaveHealthChecker: make(chan bool, 1),
@@ -96,6 +100,9 @@ func (m *Master) Receive(ctx actor.Context) {
 
 	case *messages.LoadTestUnderway:
 		m.trackSlaveCheckin(msg.Sender.Id)
+
+	case *messages.SlaveUpdate:
+		m.slaveUpdate(ctx, msg)
 
 	case *messages.SlaveFinished:
 		m.slaveFinished(ctx, msg)
@@ -233,6 +240,15 @@ func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
 		m.logger.Debug("Broadcasting message to slave", "pid", pid)
 		ctx.Send(&pid, msg)
 	})
+}
+
+func (m *Master) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	m.interactionCount += msg.Stats.Interactions.Count
+	completed := float64(100) * (float64(m.interactionCount) / float64(m.expectedInteractions))
+	m.logger.Info("Progress update", "completed", fmt.Sprintf("%.2f%%", completed))
 }
 
 func (m *Master) slaveFailed(ctx actor.Context, msg *messages.SlaveFailed) {
