@@ -90,6 +90,7 @@
       args:
         chdir: "{{ loadtest_home }}"
       ignore_errors: yes # We want the logs regardless of whether or not this is successful
+      register: load_test
       when: (not fetch_results_only)
 
     - name: Fetch the load test log files
@@ -111,3 +112,6 @@
         fail_on_missing: no
       with_items: "{{ test_network.targets }}"
       when: inventory_hostname == loadtest_master_node
+    
+    - name: Check load test result and bubble up success/failure
+      shell: exit {{load_test.rc}}
