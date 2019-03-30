@@ -164,6 +164,9 @@ func (s *SlaveConfig) Validate() error {
 	if len(s.Master) == 0 {
 		return NewError(ErrInvalidConfig, nil, "slave address for master must be explicitly specified")
 	}
+	if s.UpdateInterval == 0 {
+		return NewError(ErrInvalidConfig, nil, "slave update interval must be specified")
+	}
 	return nil
 }
 

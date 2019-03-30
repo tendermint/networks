@@ -22,6 +22,11 @@ bind = "{{ slave.bind }}"
 # we still need an external address through which to access the master).
 master = "{{ slave.master }}"
 
+# The interval at which stats updates will be sent to the master. Note that this
+# is approximate - due to the nature of the client interaction loop. Updates are
+# sent back to the master in a "best effort" fashion.
+update_interval = "{{ slave.update_interval }}"
+
 [test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = {{ test_network.enable_prometheus }}

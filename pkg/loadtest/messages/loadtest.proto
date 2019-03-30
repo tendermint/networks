@@ -49,8 +49,8 @@ message SlaveFailed {
 // SlaveUpdate is an intermediate update message from a slave to the master
 // during load testing.
 message SlaveUpdate {
-    actor.PID Sender = 1;
-    CombinedStats Stats = 2; // An intermediate update on statistics for the load test thus far.
+    actor.PID Sender           = 1;
+    int64     InteractionCount = 2; // The total number of completed interactions so far.
 }
 
 // SlaveFinished is sent by a slave when it successfully finishes its load

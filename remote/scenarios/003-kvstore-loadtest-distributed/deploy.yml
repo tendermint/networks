@@ -30,6 +30,7 @@
     slave:
       bind: "{{ inventory_hostname }}:35000"
       master: "{{ loadtest_master_hostaddr }}:35000"
+      update_interval: "10s"
     # test network configuration
     test_network:
       enable_prometheus: "true"
