@@ -61,9 +61,7 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 				RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
 				RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
 			}),
-			pstats: &PrometheusStats{
-				TargetNodeStats: make(map[string][]*NodePrometheusStats),
-			},
+			pstats:                 NewPrometheusStats(),
 			interactionCount:       make(map[string]int64),
 			expectedInteractions:   int64(cfg.Master.ExpectSlaves * cfg.Clients.Spawn * cfg.Clients.MaxInteractions),
 			lastProgressUpdate:     time.Now(),

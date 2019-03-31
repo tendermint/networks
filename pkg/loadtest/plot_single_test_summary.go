@@ -206,6 +206,17 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 		</div>
 	</section>
 
+	<section class="section">
+		<div class="container">
+			<h3 class="subtitle is-3">Node Charts</h3>
+
+			{{range $i, $nodeChart := $.NodeCharts}}
+			<h4 class="subtitle is-4">{{$nodeChart.Title}}</h4>
+			<canvas id="{{$nodeChart.ID}}-chart"></canvas>
+			{{end}}
+		</div>
+	</section>
+
 	<script type="text/javascript" src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 	<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
 
@@ -227,6 +238,10 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 				curColor = 0;
 			}
 			return result;
+		}
+
+		function resetColors() {
+			curColor = 0;
 		}
 
 		function generateHistogram(elemID, bins, counts, color, xtitle, ytitle) {
@@ -251,6 +266,57 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 							}
 						}],
 						yAxes: [{
+							display: true,
+							scaleLabel: {
+								display: true,
+								labelString: ytitle
+							},
+							ticks: {
+								beginAtZero: true
+							}
+						}]
+					}
+				}
+			});
+		}
+
+		function generateNodeChart(elemID, hostnames, nodesData, xtitle, ytitle) {
+			var ctx = document.getElementById(elemID).getContext('2d');
+			var datasets = [];
+			
+			resetColors();
+
+			for (var i=0;i<hostnames.length;i++) {
+				var dataset = {
+					label: hostnames[i],
+					borderColor: nextColor(),
+					fill: false,
+					lineTension: 0,
+					data: []
+				};
+				for (var j=0;j<nodesData[i].length;j++) {
+					dataset.data.push({x: nodesData[i][j].x, y: nodesData[i][j].y});
+				}
+				datasets.push(dataset);
+			}
+			
+			var chart = new Chart(ctx, {
+				type: 'line',
+				data: {
+					datasets: datasets
+				},
+				options: {
+					scales: {
+						xAxes: [{
+							type: 'linear',
+							display: true,
+							scaleLabel: {
+								display: true,
+								labelString: xtitle,
+							}
+						}],
+						yAxes: [{
+							type: 'linear',
 							display: true,
 							scaleLabel: {
 								display: true,
@@ -292,6 +358,20 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			"Counts"
 		);
 		{{end}}
+
+		{{range $i, $nodeChart := $.NodeCharts}}
+		generateNodeChart(
+			"{{$nodeChart.ID}}-chart",
+			[
+{{$nodeChart.Hostnames}}
+			],
+			[
+{{$nodeChart.NodesData}}
+			],
+			"Time (s)",
+			"{{$nodeChart.Title}}"
+		);
+		{{end}}
 	</script>
 </body>
 </html>
@@ -326,6 +406,9 @@ type SingleTestSummaryContext struct {
 
 	// Request-related parameters
 	Requests []SingleTestSummaryRequestParams
+
+	// Node-related chart parameters
+	NodeCharts []SingleTestNodeChart
 }
 
 // SingleTestSummaryRequestParams encapsulates parameters for a single request
@@ -344,9 +427,26 @@ type SingleTestSummaryRequestParams struct {
 	ResponseTimesCounts template.JS
 }
 
+// SingleTestNodeChart encapsulates parameters for a specific metric family.
+type SingleTestNodeChart struct {
+	ID        template.JS
+	Title     template.JS
+	Hostnames template.JS
+	NodesData template.JS
+}
+
+// MetricFamilyData is read from a node's Prometheus statistics CSV file. It
+// represents the data of a single metric family.
+type MetricFamilyData struct {
+	ID         string
+	Help       string
+	Timestamps []float64
+	Data       []float64
+}
+
 // NewSingleTestSummaryContext creates the relevant context to be able to render
 // the single load test plot.
-func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats) SingleTestSummaryContext {
+func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats, nodesData map[string]map[string]MetricFamilyData) SingleTestSummaryContext {
 	icstats := CalculateStats(stats.Interactions, stats.TotalTestTime)
 	// flatten the interaction response time histogram
 	ibins, icounts := FlattenResponseTimeHistogram(stats.Interactions.ResponseTimes, "				")
@@ -373,6 +473,8 @@ func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats) Sin
 		InteractionsResponseTimesCounts: template.JS(icounts),
 
 		Requests: buildRequestsCtx(stats.Requests, stats.TotalTestTime),
+
+		NodeCharts: buildNodeCharts(nodesData, "				"),
 	}
 }
 
@@ -406,10 +508,80 @@ func buildRequestsCtx(stats map[string]*messages.SummaryStats, totalTestTime int
 	return result
 }
 
+// nodesData is a mapping of metric family name -> hostname -> metric family data
+func buildNodeCharts(nodesData map[string]map[string]MetricFamilyData, indent string) []SingleTestNodeChart {
+	charts := make([]SingleTestNodeChart, 0)
+	metricFamilies := make([]string, 0)
+	metricFamilyTitles := make(map[string]string)
+	hostnamesSet := make(map[string]interface{})
+
+	for mfID, mfData := range nodesData {
+		metricFamilies = append(metricFamilies, mfID)
+		for hostname, hostData := range mfData {
+			hostnamesSet[hostname] = nil
+			metricFamilyTitles[mfID] = hostData.Help
+		}
+	}
+	hostnames := make([]string, 0)
+	for hostname := range hostnamesSet {
+		hostnames = append(hostnames, hostname)
+	}
+
+	sort.SliceStable(metricFamilies[:], func(i, j int) bool {
+		return strings.Compare(metricFamilies[i], metricFamilies[j]) < 0
+	})
+	sort.SliceStable(hostnames[:], func(i, j int) bool {
+		return strings.Compare(hostnames[i], hostnames[j]) < 0
+	})
+
+	hostnamesQuoted := make([]string, 0)
+	for _, hostname := range hostnames {
+		hostnamesQuoted = append(hostnamesQuoted, fmt.Sprintf("\"%s\"", hostname))
+	}
+
+	for _, mf := range metricFamilies {
+		charts = append(charts, SingleTestNodeChart{
+			ID:        template.JS(mf),
+			Title:     template.JS(metricFamilyTitles[mf]),
+			Hostnames: template.JS(indent + strings.Join(hostnamesQuoted, ", ")),
+			NodesData: template.JS(flattenNodesChartData(nodesData[mf], hostnames, indent)),
+		})
+	}
+
+	return charts
+}
+
+// Takes the given data, assuming it's the same metric family from multiple
+// different hosts, and flattens it into a string containing a
+// JavaScript-compatible array of {x:, y:} coordinates for each host.
+func flattenNodesChartData(nodesData map[string]MetricFamilyData, hostnames []string, indent string) string {
+	var builder strings.Builder
+
+	for i, hostname := range hostnames {
+		nodeData := nodesData[hostname]
+		builder.WriteString(indent + "[\n")
+		for j, ts := range nodeData.Timestamps {
+			builder.WriteString(indent + "	{x:" + fmt.Sprintf("%.2f", ts) + ",y:" + fmt.Sprintf("%f", nodeData.Data[j]) + "}")
+			if j < len(nodeData.Timestamps)-1 {
+				builder.WriteString(",")
+			}
+			builder.WriteString("\n")
+		}
+		builder.WriteString(indent + "]")
+
+		if i < len(nodesData)-1 {
+			builder.WriteString(",")
+		}
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
+}
+
 // RenderSingleTestSummaryPlot is a convenience method to render the single test
 // summary plot to a string, ready to be written to an output file.
-func RenderSingleTestSummaryPlot(cfg *Config, stats *messages.CombinedStats) (string, error) {
-	ctx := NewSingleTestSummaryContext(cfg, stats)
+func RenderSingleTestSummaryPlot(cfg *Config, stats *messages.CombinedStats, nodesData map[string]map[string]MetricFamilyData) (string, error) {
+	ctx := NewSingleTestSummaryContext(cfg, stats, nodesData)
 	tmpl, err := template.New("single-test-summary-plot").Parse(SingleTestSummaryPlot)
 	if err != nil {
 		return "", err
