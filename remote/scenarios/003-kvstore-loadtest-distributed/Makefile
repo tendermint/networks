@@ -30,10 +30,10 @@ LOCAL_RESULTS_DIR?=/tmp/003-kvstore-loadtest-distributed
 .PHONY: execute plot-results
 
 execute:
-	@if [ "${FAST_MODE}" == "false" ] && [ "${FETCH_RESULTS_ONLY}" == "false" ]; then \
-		echo "Building tm-load-test for Linux..."; \
-		$(MAKE) -C $(TMLOADTEST_PATH) build-tm-load-test-linux; \
-	fi
+	@FAST_MODE=$(FAST_MODE) \
+		FETCH_RESULTS_ONLY=$(FETCH_RESULTS_ONLY) \
+		TMLOADTEST_PATH=$(TMLOADTEST_PATH) \
+		./scripts/build-executable.sh
 	@mkdir -p $(LOCAL_RESULTS_DIR)
 	@rm -rf $(LOCAL_RESULTS_DIR)/*
 	ansible-playbook -i $(INVENTORY) \
