@@ -11,7 +11,7 @@ import (
 )
 
 // SingleTestSummaryPlot is an HTML page template that facilitates plotting the
-// summary results (using Chart.js) of a single load test.
+// summary results (using plotly.js) of a single load test.
 const SingleTestSummaryPlot = `<!DOCTYPE html>
 <html>
 <head>
@@ -148,7 +148,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 					</table>
 				</div>
 				<div class="column">
-					<canvas id="interaction-rt-chart"></canvas>
+					<div id="interaction-rt-chart"></div>
 				</div>
 			</div>
 	</div>
@@ -198,7 +198,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 					</table>
 				</div>
 				<div class="column">
-					<canvas id="{{$req.Name}}-rt-chart"></canvas>
+					<div id="{{$req.Name}}-rt-chart"></div>
 				</div>
 			</div>
 			{{end}}
@@ -212,123 +212,60 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 
 			{{range $i, $nodeChart := $.NodeCharts}}
 			<h4 class="subtitle is-4">{{$nodeChart.Title}}</h4>
-			<canvas id="{{$nodeChart.ID}}-chart"></canvas>
+			<div id="{{$nodeChart.ID}}-chart"></div>
 			{{end}}
 		</div>
 	</section>
 
-	<script type="text/javascript" src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
-	<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
+	<script src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+	<script src="https://cdn.plot.ly/plotly-1.45.3.min.js"></script>
 
 	<script>
-		var colorPalette = [
-			'hsl(171, 100%, 41%)',
-			'hsl(217, 71%, 53%)',
-			'hsl(204, 86%, 53%)',
-			'hsl(141, 71%, 48%)',
-			'hsl(348, 100%, 61%)',
-			'hsl(0, 0%, 71%)'
-		];
-		var curColor = 0;
-
-		function nextColor() {
-			result = colorPalette[curColor];
-			curColor++;
-			if (curColor >= colorPalette.length) {
-				curColor = 0;
-			}
-			return result;
-		}
-
-		function resetColors() {
-			curColor = 0;
-		}
-
-		function generateHistogram(elemID, bins, counts, color, xtitle, ytitle) {
-			var ctx = document.getElementById(elemID).getContext('2d');
-			var chart = new Chart(ctx, {
+		function generateHistogram(elemID, bins, counts, xtitle, ytitle) {
+			var trace = {
+				x: bins,
+				y: counts,
 				type: 'bar',
-				data: {
-					labels: bins,
-					datasets: [{
-						label: ytitle,
-						backgroundColor: color,
-						data: counts
-					}]
+				name: ytitle
+			};
+			var data = [trace];
+			var layout = {
+				title: ytitle,
+				xaxis: {
+					title: xtitle
 				},
-				options: {
-					scales: {
-						xAxes: [{
-							display: true,
-							scaleLabel: {
-								display: true,
-								labelString: xtitle,
-							}
-						}],
-						yAxes: [{
-							display: true,
-							scaleLabel: {
-								display: true,
-								labelString: ytitle
-							},
-							ticks: {
-								beginAtZero: true
-							}
-						}]
-					}
+				yaxis: {
+					title: ytitle
 				}
-			});
+			};
+
+			Plotly.newPlot(elemID, data, layout);
 		}
 
 		function generateNodeChart(elemID, hostnames, nodesData, xtitle, ytitle) {
-			var ctx = document.getElementById(elemID).getContext('2d');
-			var datasets = [];
-			
-			resetColors();
+			var traces = [];
 
 			for (var i=0;i<hostnames.length;i++) {
-				var dataset = {
-					label: hostnames[i],
-					borderColor: nextColor(),
-					fill: false,
-					lineTension: 0,
-					data: []
-				};
-				for (var j=0;j<nodesData[i].length;j++) {
-					dataset.data.push({x: nodesData[i][j].x, y: nodesData[i][j].y});
-				}
-				datasets.push(dataset);
+				traces.push({
+					x: nodesData[i].x,
+					y: nodesData[i].y,
+					type: 'scatter',
+					mode: 'lines',
+					name: hostnames[i]
+				});
 			}
-			
-			var chart = new Chart(ctx, {
-				type: 'line',
-				data: {
-					datasets: datasets
+
+			var layout = {
+				title: ytitle,
+				xaxis: {
+					title: xtitle
 				},
-				options: {
-					scales: {
-						xAxes: [{
-							type: 'linear',
-							display: true,
-							scaleLabel: {
-								display: true,
-								labelString: xtitle,
-							}
-						}],
-						yAxes: [{
-							type: 'linear',
-							display: true,
-							scaleLabel: {
-								display: true,
-								labelString: ytitle
-							},
-							ticks: {
-								beginAtZero: true
-							}
-						}]
-					}
+				yaxis: {
+					title: ytitle
 				}
-			});
+			};
+
+			Plotly.newPlot(elemID, traces, layout);
 		}
 
 		generateHistogram(
@@ -338,8 +275,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			], 
 			[
 {{.InteractionsResponseTimesCounts}}
-			], 
-			nextColor(), 
+			],
 			"Interaction Response Time (milliseconds)",
 			"Counts"
 		);
@@ -352,8 +288,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			], 
 			[
 {{$req.ResponseTimesCounts}}
-			], 
-			nextColor(), 
+			],
 			"{{$req.Name}} Response Time (milliseconds)",
 			"Counts"
 		);
@@ -559,16 +494,32 @@ func flattenNodesChartData(nodesData map[string]MetricFamilyData, hostnames []st
 
 	for i, hostname := range hostnames {
 		nodeData := nodesData[hostname]
-		builder.WriteString(indent + "[\n")
+		builder.WriteString(indent + "{\n")
+		builder.WriteString(indent + "	x: [")
 		for j, ts := range nodeData.Timestamps {
-			builder.WriteString(indent + "	{x:" + fmt.Sprintf("%.2f", ts) + ",y:" + fmt.Sprintf("%f", nodeData.Data[j]) + "}")
+			if (j % 10) == 0 {
+				builder.WriteString("\n" + indent + "		")
+			}
+			builder.WriteString(fmt.Sprintf("%.2f", ts))
 			if j < len(nodeData.Timestamps)-1 {
 				builder.WriteString(",")
 			}
-			builder.WriteString("\n")
 		}
-		builder.WriteString(indent + "]")
+		builder.WriteString("\n" + indent + "	],\n") // x
 
+		builder.WriteString(indent + "	y: [")
+		for j, value := range nodeData.Data {
+			if (j % 10) == 0 {
+				builder.WriteString("\n" + indent + "		")
+			}
+			builder.WriteString(fmt.Sprintf("%.2f", value))
+			if j < len(nodeData.Timestamps)-1 {
+				builder.WriteString(",")
+			}
+		}
+		builder.WriteString("\n" + indent + "	]\n") // y
+
+		builder.WriteString(indent + "}") // host data
 		if i < len(nodesData)-1 {
 			builder.WriteString(",")
 		}

@@ -17,7 +17,7 @@ var (
 
 func init() {
 	rootCmd.Usage = func() {
-		fmt.Println(`Utility script to generate single-node load test plots using Chart.js
+		fmt.Println(`Utility script to generate single-node load test plots using plotly.js
 
 Usage:
   go run plot-results.go -in <load-test-results-dir> -out <plot-output-dir>
@@ -32,7 +32,7 @@ Flags:`)
 		fmt.Println("")
 	}
 	rootCmd.StringVar(&flagInputDir, "in", "", "the input directory in which to find the single load test's results")
-	rootCmd.StringVar(&flagOutputDir, "out", "", "the output directory into which to write the Chart.js plots")
+	rootCmd.StringVar(&flagOutputDir, "out", "", "the output directory into which to write the plotly.js plots")
 }
 
 func main() {
