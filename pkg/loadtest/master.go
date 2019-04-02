@@ -1,6 +1,7 @@
 package loadtest
 
 import (
+	"fmt"
 	"path"
 	"sync"
 	"time"
@@ -20,12 +21,22 @@ type Master struct {
 	logger logging.Logger
 
 	slaves *actor.PIDSet
-	istats *messages.CombinedStats // Interaction/request-derived statistics
-	pstats *PrometheusStats        // Stats from Prometheus endpoints
-	mtx    *sync.Mutex
+
+	loadTestStartTime    time.Time               // Helps with calculating overall load testing time for absolute statistics
+	istats               *messages.CombinedStats // For keeping track of interaction and request-related statistics
+	pstats               *PrometheusStats        // For keeping track of stats from Prometheus
+	interactionCount     map[string]int64        // A mapping of slave IDs to interaction counts
+	expectedInteractions int64
+	lastProgressUpdate   time.Time
+
+	lastCheckin            map[string]time.Time // The last time we received a "load testing underway" message from each slave (ID -> last checkin time)
+	checkinTicker          *time.Ticker
+	stopSlaveHealthChecker chan bool
 
 	statsShutdownc chan bool
 	statsDonec     chan bool
+
+	mtx *sync.Mutex
 }
 
 // Master implements actor.Actor
@@ -35,7 +46,6 @@ var _ actor.Actor = (*Master)(nil)
 // PID with which one can interact with the master node. On failure, returns an
 // error.
 func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error) {
-	clientFactory := GetClientFactory(cfg.Clients.Type)
 	remote.Start(cfg.Master.Bind)
 	ctx := actor.EmptyRootContext
 	props := actor.PropsFromProducer(func() actor.Actor {
@@ -44,19 +54,23 @@ func NewMaster(cfg *Config, probe Probe) (*actor.PID, *actor.RootContext, error)
 			probe:  probe,
 			logger: logging.NewLogrusLogger("master"),
 			slaves: actor.NewPIDSet(),
-			istats: clientFactory.NewStats(ClientParams{
+			istats: GetClientFactory(cfg.Clients.Type).NewStats(ClientParams{
 				TargetNodes:        cfg.TestNetwork.GetTargetRPCURLs(),
 				InteractionTimeout: time.Duration(cfg.Clients.InteractionTimeout),
 				RequestTimeout:     time.Duration(cfg.Clients.RequestTimeout),
 				RequestWaitMin:     time.Duration(cfg.Clients.RequestWaitMin),
 				RequestWaitMax:     time.Duration(cfg.Clients.RequestWaitMax),
 			}),
-			pstats: &PrometheusStats{
-				TargetNodeStats: make(map[string][]*NodePrometheusStats),
-			},
-			mtx:            &sync.Mutex{},
-			statsShutdownc: make(chan bool, 1),
-			statsDonec:     make(chan bool, 1),
+			pstats:                 NewPrometheusStats(),
+			interactionCount:       make(map[string]int64),
+			expectedInteractions:   int64(cfg.Master.ExpectSlaves * cfg.Clients.Spawn * cfg.Clients.MaxInteractions),
+			lastProgressUpdate:     time.Now(),
+			lastCheckin:            make(map[string]time.Time),
+			checkinTicker:          nil,
+			stopSlaveHealthChecker: make(chan bool, 1),
+			mtx:                    &sync.Mutex{},
+			statsShutdownc:         make(chan bool, 1),
+			statsDonec:             make(chan bool, 1),
 		}
 	})
 	pid, err := ctx.SpawnNamed(props, "master")
@@ -84,8 +98,17 @@ func (m *Master) Receive(ctx actor.Context) {
 	case *messages.SlaveFailed:
 		m.slaveFailed(ctx, msg)
 
+	case *messages.LoadTestUnderway:
+		m.trackSlaveCheckin(msg.Sender.Id)
+
+	case *messages.SlaveUpdate:
+		m.slaveUpdate(ctx, msg)
+
 	case *messages.SlaveFinished:
 		m.slaveFinished(ctx, msg)
+
+	case *messages.MasterFailed:
+		m.masterFailed(ctx, msg)
 
 	case *messages.Kill:
 		m.kill(ctx)
@@ -142,6 +165,7 @@ func (m *Master) slaveReady(ctx actor.Context, msg *messages.SlaveReady) {
 		// keep track of the slave
 		m.slaves.Add(slave)
 		m.logger.Info("Added incoming slave", "slaveCount", m.slaves.Len(), "expected", m.cfg.Master.ExpectSlaves)
+		m.trackSlaveCheckin(slave.Id)
 		// tell the slave it's got the go-ahead
 		ctx.Send(slave, &messages.SlaveAccepted{Sender: ctx.Self()})
 		// if we have enough slaves to start the load testing
@@ -154,6 +178,62 @@ func (m *Master) slaveReady(ctx actor.Context, msg *messages.SlaveReady) {
 func (m *Master) startLoadTest(ctx actor.Context) {
 	m.logger.Info("Accepted enough connected slaves - starting load test", "slaveCount", m.slaves.Len())
 	m.broadcast(ctx, &messages.StartLoadTest{Sender: ctx.Self()})
+	m.checkinTicker = time.NewTicker(DefaultHealthCheckInterval)
+
+	// track the start time for the load test
+	m.mtx.Lock()
+	m.loadTestStartTime = time.Now()
+	m.mtx.Unlock()
+
+	go m.slaveHealthChecker(ctx)
+}
+
+func (m *Master) slaveHealthChecker(ctx actor.Context) {
+loop:
+	for {
+		select {
+		case <-m.checkinTicker.C:
+			m.checkSlaveHealth(ctx)
+
+		case <-m.stopSlaveHealthChecker:
+			break loop
+		}
+	}
+}
+
+func (m *Master) checkSlaveHealth(ctx actor.Context) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	// we're only interested in slaves that are still connected
+	for _, slave := range m.slaves.Values() {
+		slaveID := slave.Id
+		lastSeen := m.lastCheckin[slaveID]
+		if time.Since(lastSeen) >= DefaultMaxMissedHealthCheckPeriod {
+			m.logger.Error("Failed to see slave recently enough", "slaveID", slaveID, "lastSeen", lastSeen.String())
+			ctx.Send(ctx.Self(), &messages.MasterFailed{
+				Sender: ctx.Self(),
+				Reason: fmt.Sprintf("Failed to see slave %s within %s", slaveID, DefaultMaxMissedHealthCheckPeriod.String()),
+			})
+			// don't bother checking any of the other slaves (plus this will
+			// most likely result in bombardment of the slaves with MasterFailed
+			// messages)
+			return
+		}
+	}
+}
+
+func (m *Master) masterFailed(ctx actor.Context, msg *messages.MasterFailed) {
+	// rebroadcast this message to the slaves
+	m.broadcast(ctx, msg)
+	// we're done here
+	m.shutdown(ctx, NewError(ErrSlaveFailed, nil))
+}
+
+func (m *Master) trackSlaveCheckin(slaveID string) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.lastCheckin[slaveID] = time.Now()
 }
 
 func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
@@ -162,6 +242,68 @@ func (m *Master) broadcast(ctx actor.Context, msg interface{}) {
 		m.logger.Debug("Broadcasting message to slave", "pid", pid)
 		ctx.Send(&pid, msg)
 	})
+}
+
+func fmtTimeLeft(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%02dh%02dm%02ds", h, m, s)
+}
+
+func (m *Master) slaveUpdate(ctx actor.Context, msg *messages.SlaveUpdate) {
+	m.updateSlaveInteractionCount(msg.Sender.Id, msg.InteractionCount)
+
+	if m.dueForProgressUpdate() {
+		totalInteractions := m.totalSlaveInteractionCount()
+		completed := float64(100) * (float64(totalInteractions) / float64(m.expectedInteractions))
+		interactionsPerSec := float64(totalInteractions) / time.Since(m.loadTestStartTime).Seconds()
+		timeLeft := time.Duration(1000 * time.Hour)
+		if interactionsPerSec > 0 {
+			timeLeft = time.Duration((float64(m.expectedInteractions-totalInteractions) / interactionsPerSec) * float64(time.Second))
+		}
+		m.logger.Info(
+			"Progress update",
+			"completed", fmt.Sprintf("%.2f%%", completed),
+			"interactionsPerSec", fmt.Sprintf("%.2f", interactionsPerSec),
+			"approxTimeLeft", fmtTimeLeft(timeLeft),
+		)
+		m.progressUpdated()
+	}
+}
+
+func (m *Master) updateSlaveInteractionCount(slaveID string, count int64) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.interactionCount[slaveID] = count
+}
+
+func (m *Master) totalSlaveInteractionCount() int64 {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	totalCount := int64(0)
+	for _, count := range m.interactionCount {
+		totalCount += count
+	}
+	return totalCount
+}
+
+func (m *Master) dueForProgressUpdate() bool {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	return time.Since(m.lastProgressUpdate) >= (20 * time.Second)
+}
+
+func (m *Master) progressUpdated() {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	m.lastProgressUpdate = time.Now()
 }
 
 func (m *Master) slaveFailed(ctx actor.Context, msg *messages.SlaveFailed) {
@@ -182,8 +324,21 @@ func (m *Master) slaveFinished(ctx actor.Context, msg *messages.SlaveFinished) {
 	// if we've heard from all the slaves we accepted
 	if m.slaves.Len() == 0 {
 		m.logger.Info("All slaves successfully completed their load testing")
-		m.shutdown(ctx, nil)
+		m.trackTestEndTime()
+		if err := m.sanityCheckStats(); err != nil {
+			m.logger.Error("Statistics sanity check failed", "err", err)
+			m.shutdown(ctx, err)
+		} else {
+			m.shutdown(ctx, nil)
+		}
 	}
+}
+
+func (m *Master) trackTestEndTime() {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	m.istats.TotalTestTime = time.Since(m.loadTestStartTime).Nanoseconds()
+	m.logger.Debug("Tracking total test duration", "TotalTestTime", m.istats.TotalTestTime)
 }
 
 func (m *Master) kill(ctx actor.Context) {
@@ -203,6 +358,8 @@ func (m *Master) stopPrometheusCollectors() {
 }
 
 func (m *Master) shutdown(ctx actor.Context, err error) {
+	// stop checking slave health
+	m.stopSlaveHealthChecker <- true
 	m.stopPrometheusCollectors()
 	m.writeStats()
 	if err != nil {
@@ -222,8 +379,35 @@ func (m *Master) updateStats(stats *messages.CombinedStats) {
 	m.mtx.Unlock()
 }
 
+func (m *Master) sanityCheckStats() error {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	expectedClients := m.cfg.Master.ExpectSlaves * m.cfg.Clients.Spawn
+	if m.istats.Interactions.TotalClients != int64(expectedClients) {
+		return NewError(
+			ErrStatsSanityCheckFailed,
+			nil,
+			fmt.Sprintf("Expected total clients to be %d, but was %d", expectedClients, m.istats.Interactions.TotalClients),
+		)
+	}
+
+	expectedInteractions := expectedClients * m.cfg.Clients.MaxInteractions
+	if m.istats.Interactions.Count != int64(expectedInteractions) {
+		return NewError(
+			ErrStatsSanityCheckFailed,
+			nil,
+			fmt.Sprintf("Expected total interactions to be %d, but was %d", expectedInteractions, m.istats.Interactions.Count),
+		)
+	}
+
+	return nil
+}
+
 func (m *Master) writeStats() {
 	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	LogStats(logging.NewLogrusLogger(""), m.istats)
 	filename := path.Join(m.cfg.Master.ResultsDir, "summary.csv")
 	if err := WriteCombinedStatsToFile(filename, m.istats); err != nil {
@@ -232,5 +416,4 @@ func (m *Master) writeStats() {
 	if err := m.pstats.Dump(m.cfg.Master.ResultsDir); err != nil {
 		m.logger.Error("Failed to write Prometheus stats to output directory", "err", err)
 	}
-	m.mtx.Unlock()
 }

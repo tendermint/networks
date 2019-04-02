@@ -3,16 +3,16 @@
 
 package messages
 
-import proto "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
-import actor "github.com/AsynkronIT/protoactor-go/actor"
-
-import strings "strings"
-import reflect "reflect"
-import github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
-
-import io "io"
+import (
+	fmt "fmt"
+	actor "github.com/AsynkronIT/protoactor-go/actor"
+	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
+	io "io"
+	math "math"
+	reflect "reflect"
+	strings "strings"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -27,13 +27,13 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 // SlaveReady is sent by a slave when it's ready to start load testing.
 type SlaveReady struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 }
 
 func (m *SlaveReady) Reset()      { *m = SlaveReady{} }
 func (*SlaveReady) ProtoMessage() {}
 func (*SlaveReady) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{0}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{0}
 }
 func (m *SlaveReady) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -50,8 +50,8 @@ func (m *SlaveReady) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (dst *SlaveReady) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveReady.Merge(dst, src)
+func (m *SlaveReady) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveReady.Merge(m, src)
 }
 func (m *SlaveReady) XXX_Size() int {
 	return m.Size()
@@ -72,13 +72,13 @@ func (m *SlaveReady) GetSender() *actor.PID {
 // SlaveAccepted is sent by the master to a slave to indicate that it's been
 // accepted for load testing.
 type SlaveAccepted struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 }
 
 func (m *SlaveAccepted) Reset()      { *m = SlaveAccepted{} }
 func (*SlaveAccepted) ProtoMessage() {}
 func (*SlaveAccepted) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{1}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{1}
 }
 func (m *SlaveAccepted) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -95,8 +95,8 @@ func (m *SlaveAccepted) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (dst *SlaveAccepted) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveAccepted.Merge(dst, src)
+func (m *SlaveAccepted) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveAccepted.Merge(m, src)
 }
 func (m *SlaveAccepted) XXX_Size() int {
 	return m.Size()
@@ -117,14 +117,14 @@ func (m *SlaveAccepted) GetSender() *actor.PID {
 // SlaveRejected is sent by the master to a slave when it already has too many
 // connected slaves, or it has seen a slave with the same ID before.
 type SlaveRejected struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 	Reason string     `protobuf:"bytes,2,opt,name=Reason,proto3" json:"Reason,omitempty"`
 }
 
 func (m *SlaveRejected) Reset()      { *m = SlaveRejected{} }
 func (*SlaveRejected) ProtoMessage() {}
 func (*SlaveRejected) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{2}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{2}
 }
 func (m *SlaveRejected) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -141,8 +141,8 @@ func (m *SlaveRejected) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (dst *SlaveRejected) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveRejected.Merge(dst, src)
+func (m *SlaveRejected) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveRejected.Merge(m, src)
 }
 func (m *SlaveRejected) XXX_Size() int {
 	return m.Size()
@@ -169,13 +169,13 @@ func (m *SlaveRejected) GetReason() string {
 
 // StartLoadTest is sent by the master to the slaves to kick off the testing.
 type StartLoadTest struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 }
 
 func (m *StartLoadTest) Reset()      { *m = StartLoadTest{} }
 func (*StartLoadTest) ProtoMessage() {}
 func (*StartLoadTest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{3}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{3}
 }
 func (m *StartLoadTest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -192,8 +192,8 @@ func (m *StartLoadTest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (dst *StartLoadTest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartLoadTest.Merge(dst, src)
+func (m *StartLoadTest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartLoadTest.Merge(m, src)
 }
 func (m *StartLoadTest) XXX_Size() int {
 	return m.Size()
@@ -211,17 +211,64 @@ func (m *StartLoadTest) GetSender() *actor.PID {
 	return nil
 }
 
+// LoadTestUnderway is sent by slaves on a regular basis from the instant that
+// load testing starts. This acts as a notification to the master that the
+// slaves are, in fact, testing, as well as a form of health check/heartbeat to
+// ensure that the load testing completes effectively.
+type LoadTestUnderway struct {
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
+}
+
+func (m *LoadTestUnderway) Reset()      { *m = LoadTestUnderway{} }
+func (*LoadTestUnderway) ProtoMessage() {}
+func (*LoadTestUnderway) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cbef85f58fc0bd9a, []int{4}
+}
+func (m *LoadTestUnderway) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LoadTestUnderway) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LoadTestUnderway.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LoadTestUnderway) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LoadTestUnderway.Merge(m, src)
+}
+func (m *LoadTestUnderway) XXX_Size() int {
+	return m.Size()
+}
+func (m *LoadTestUnderway) XXX_DiscardUnknown() {
+	xxx_messageInfo_LoadTestUnderway.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LoadTestUnderway proto.InternalMessageInfo
+
+func (m *LoadTestUnderway) GetSender() *actor.PID {
+	if m != nil {
+		return m.Sender
+	}
+	return nil
+}
+
 // MasterFailed is sent by the master node to the slaves if the master node
 // encounters an error from which it cannot recover.
 type MasterFailed struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 	Reason string     `protobuf:"bytes,2,opt,name=Reason,proto3" json:"Reason,omitempty"`
 }
 
 func (m *MasterFailed) Reset()      { *m = MasterFailed{} }
 func (*MasterFailed) ProtoMessage() {}
 func (*MasterFailed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{4}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{5}
 }
 func (m *MasterFailed) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -238,8 +285,8 @@ func (m *MasterFailed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return b[:n], nil
 	}
 }
-func (dst *MasterFailed) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_MasterFailed.Merge(dst, src)
+func (m *MasterFailed) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MasterFailed.Merge(m, src)
 }
 func (m *MasterFailed) XXX_Size() int {
 	return m.Size()
@@ -266,14 +313,14 @@ func (m *MasterFailed) GetReason() string {
 
 // SlaveFailed is sent by a slave if testing fails for any reason.
 type SlaveFailed struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 	Reason string     `protobuf:"bytes,2,opt,name=Reason,proto3" json:"Reason,omitempty"`
 }
 
 func (m *SlaveFailed) Reset()      { *m = SlaveFailed{} }
 func (*SlaveFailed) ProtoMessage() {}
 func (*SlaveFailed) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{5}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{6}
 }
 func (m *SlaveFailed) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -290,8 +337,8 @@ func (m *SlaveFailed) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return b[:n], nil
 	}
 }
-func (dst *SlaveFailed) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveFailed.Merge(dst, src)
+func (m *SlaveFailed) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveFailed.Merge(m, src)
 }
 func (m *SlaveFailed) XXX_Size() int {
 	return m.Size()
@@ -319,14 +366,14 @@ func (m *SlaveFailed) GetReason() string {
 // SlaveUpdate is an intermediate update message from a slave to the master
 // during load testing.
 type SlaveUpdate struct {
-	Sender *actor.PID     `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
-	Stats  *CombinedStats `protobuf:"bytes,2,opt,name=Stats" json:"Stats,omitempty"`
+	Sender           *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
+	InteractionCount int64      `protobuf:"varint,2,opt,name=InteractionCount,proto3" json:"InteractionCount,omitempty"`
 }
 
 func (m *SlaveUpdate) Reset()      { *m = SlaveUpdate{} }
 func (*SlaveUpdate) ProtoMessage() {}
 func (*SlaveUpdate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{6}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{7}
 }
 func (m *SlaveUpdate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -343,8 +390,8 @@ func (m *SlaveUpdate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return b[:n], nil
 	}
 }
-func (dst *SlaveUpdate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveUpdate.Merge(dst, src)
+func (m *SlaveUpdate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveUpdate.Merge(m, src)
 }
 func (m *SlaveUpdate) XXX_Size() int {
 	return m.Size()
@@ -362,24 +409,24 @@ func (m *SlaveUpdate) GetSender() *actor.PID {
 	return nil
 }
 
-func (m *SlaveUpdate) GetStats() *CombinedStats {
+func (m *SlaveUpdate) GetInteractionCount() int64 {
 	if m != nil {
-		return m.Stats
+		return m.InteractionCount
 	}
-	return nil
+	return 0
 }
 
 // SlaveFinished is sent by a slave when it successfully finishes its load
 // testing.
 type SlaveFinished struct {
-	Sender *actor.PID     `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
-	Stats  *CombinedStats `protobuf:"bytes,2,opt,name=Stats" json:"Stats,omitempty"`
+	Sender *actor.PID     `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
+	Stats  *CombinedStats `protobuf:"bytes,2,opt,name=Stats,proto3" json:"Stats,omitempty"`
 }
 
 func (m *SlaveFinished) Reset()      { *m = SlaveFinished{} }
 func (*SlaveFinished) ProtoMessage() {}
 func (*SlaveFinished) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{7}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{8}
 }
 func (m *SlaveFinished) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -396,8 +443,8 @@ func (m *SlaveFinished) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (dst *SlaveFinished) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SlaveFinished.Merge(dst, src)
+func (m *SlaveFinished) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SlaveFinished.Merge(m, src)
 }
 func (m *SlaveFinished) XXX_Size() int {
 	return m.Size()
@@ -426,13 +473,13 @@ func (m *SlaveFinished) GetStats() *CombinedStats {
 // timeout period to ensure that all slaves are connected. If we are missing
 // slaves at this time, the master will fail and shut down.
 type CheckAllSlavesConnected struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 }
 
 func (m *CheckAllSlavesConnected) Reset()      { *m = CheckAllSlavesConnected{} }
 func (*CheckAllSlavesConnected) ProtoMessage() {}
 func (*CheckAllSlavesConnected) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{8}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{9}
 }
 func (m *CheckAllSlavesConnected) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -449,8 +496,8 @@ func (m *CheckAllSlavesConnected) XXX_Marshal(b []byte, deterministic bool) ([]b
 		return b[:n], nil
 	}
 }
-func (dst *CheckAllSlavesConnected) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CheckAllSlavesConnected.Merge(dst, src)
+func (m *CheckAllSlavesConnected) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CheckAllSlavesConnected.Merge(m, src)
 }
 func (m *CheckAllSlavesConnected) XXX_Size() int {
 	return m.Size()
@@ -471,13 +518,13 @@ func (m *CheckAllSlavesConnected) GetSender() *actor.PID {
 // Kill is an internal message for terminating a node when SIGTERM or SIGINT is
 // received.
 type Kill struct {
-	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender" json:"Sender,omitempty"`
+	Sender *actor.PID `protobuf:"bytes,1,opt,name=Sender,proto3" json:"Sender,omitempty"`
 }
 
 func (m *Kill) Reset()      { *m = Kill{} }
 func (*Kill) ProtoMessage() {}
 func (*Kill) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{9}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{10}
 }
 func (m *Kill) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -494,8 +541,8 @@ func (m *Kill) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (dst *Kill) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Kill.Merge(dst, src)
+func (m *Kill) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Kill.Merge(m, src)
 }
 func (m *Kill) XXX_Size() int {
 	return m.Size()
@@ -516,15 +563,15 @@ func (m *Kill) GetSender() *actor.PID {
 // CombinedStats encapsulates the statistics we receive from a slave node
 // during/after testing for both interactions and requests.
 type CombinedStats struct {
-	TotalInteractionTime int64                    `protobuf:"varint,1,opt,name=TotalInteractionTime,proto3" json:"TotalInteractionTime,omitempty"`
-	Interactions         *SummaryStats            `protobuf:"bytes,2,opt,name=Interactions" json:"Interactions,omitempty"`
-	Requests             map[string]*SummaryStats `protobuf:"bytes,3,rep,name=Requests" json:"Requests,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value"`
+	TotalTestTime int64                    `protobuf:"varint,1,opt,name=TotalTestTime,proto3" json:"TotalTestTime,omitempty"`
+	Interactions  *SummaryStats            `protobuf:"bytes,2,opt,name=Interactions,proto3" json:"Interactions,omitempty"`
+	Requests      map[string]*SummaryStats `protobuf:"bytes,3,rep,name=Requests,proto3" json:"Requests,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *CombinedStats) Reset()      { *m = CombinedStats{} }
 func (*CombinedStats) ProtoMessage() {}
 func (*CombinedStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{10}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{11}
 }
 func (m *CombinedStats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -541,8 +588,8 @@ func (m *CombinedStats) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (dst *CombinedStats) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CombinedStats.Merge(dst, src)
+func (m *CombinedStats) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CombinedStats.Merge(m, src)
 }
 func (m *CombinedStats) XXX_Size() int {
 	return m.Size()
@@ -553,9 +600,9 @@ func (m *CombinedStats) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CombinedStats proto.InternalMessageInfo
 
-func (m *CombinedStats) GetTotalInteractionTime() int64 {
+func (m *CombinedStats) GetTotalTestTime() int64 {
 	if m != nil {
-		return m.TotalInteractionTime
+		return m.TotalTestTime
 	}
 	return 0
 }
@@ -580,22 +627,21 @@ type SummaryStats struct {
 	Count        int64 `protobuf:"varint,1,opt,name=Count,proto3" json:"Count,omitempty"`
 	Errors       int64 `protobuf:"varint,2,opt,name=Errors,proto3" json:"Errors,omitempty"`
 	TotalTime    int64 `protobuf:"varint,3,opt,name=TotalTime,proto3" json:"TotalTime,omitempty"`
-	AbsTotalTime int64 `protobuf:"varint,4,opt,name=AbsTotalTime,proto3" json:"AbsTotalTime,omitempty"`
-	MinTime      int64 `protobuf:"varint,5,opt,name=MinTime,proto3" json:"MinTime,omitempty"`
-	MaxTime      int64 `protobuf:"varint,6,opt,name=MaxTime,proto3" json:"MaxTime,omitempty"`
-	TotalClients int64 `protobuf:"varint,7,opt,name=TotalClients,proto3" json:"TotalClients,omitempty"`
+	MinTime      int64 `protobuf:"varint,4,opt,name=MinTime,proto3" json:"MinTime,omitempty"`
+	MaxTime      int64 `protobuf:"varint,5,opt,name=MaxTime,proto3" json:"MaxTime,omitempty"`
+	TotalClients int64 `protobuf:"varint,6,opt,name=TotalClients,proto3" json:"TotalClients,omitempty"`
 	// For keeping track of the different kinds of errors that occurred, as well
 	// as the number of times each error occurred.
-	ErrorsByType map[string]int64 `protobuf:"bytes,8,rep,name=ErrorsByType" json:"ErrorsByType,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	ErrorsByType map[string]int64 `protobuf:"bytes,7,rep,name=ErrorsByType,proto3" json:"ErrorsByType,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	// Allows us to plot a summary picture of the range of response times during
 	// our interactions/requests.
-	ResponseTimes *ResponseTimeHistogram `protobuf:"bytes,9,opt,name=ResponseTimes" json:"ResponseTimes,omitempty"`
+	ResponseTimes *ResponseTimeHistogram `protobuf:"bytes,8,opt,name=ResponseTimes,proto3" json:"ResponseTimes,omitempty"`
 }
 
 func (m *SummaryStats) Reset()      { *m = SummaryStats{} }
 func (*SummaryStats) ProtoMessage() {}
 func (*SummaryStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{11}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{12}
 }
 func (m *SummaryStats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -612,8 +658,8 @@ func (m *SummaryStats) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return b[:n], nil
 	}
 }
-func (dst *SummaryStats) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SummaryStats.Merge(dst, src)
+func (m *SummaryStats) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SummaryStats.Merge(m, src)
 }
 func (m *SummaryStats) XXX_Size() int {
 	return m.Size()
@@ -641,13 +687,6 @@ func (m *SummaryStats) GetErrors() int64 {
 func (m *SummaryStats) GetTotalTime() int64 {
 	if m != nil {
 		return m.TotalTime
-	}
-	return 0
-}
-
-func (m *SummaryStats) GetAbsTotalTime() int64 {
-	if m != nil {
-		return m.AbsTotalTime
 	}
 	return 0
 }
@@ -693,13 +732,13 @@ type ResponseTimeHistogram struct {
 	Timeout  int64           `protobuf:"varint,1,opt,name=Timeout,proto3" json:"Timeout,omitempty"`
 	BinSize  int64           `protobuf:"varint,2,opt,name=BinSize,proto3" json:"BinSize,omitempty"`
 	BinCount int64           `protobuf:"varint,3,opt,name=BinCount,proto3" json:"BinCount,omitempty"`
-	TimeBins map[int64]int64 `protobuf:"bytes,4,rep,name=TimeBins" json:"TimeBins,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	TimeBins map[int64]int64 `protobuf:"bytes,4,rep,name=TimeBins,proto3" json:"TimeBins,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 
 func (m *ResponseTimeHistogram) Reset()      { *m = ResponseTimeHistogram{} }
 func (*ResponseTimeHistogram) ProtoMessage() {}
 func (*ResponseTimeHistogram) Descriptor() ([]byte, []int) {
-	return fileDescriptor_loadtest_220077345dc5b600, []int{12}
+	return fileDescriptor_cbef85f58fc0bd9a, []int{13}
 }
 func (m *ResponseTimeHistogram) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -716,8 +755,8 @@ func (m *ResponseTimeHistogram) XXX_Marshal(b []byte, deterministic bool) ([]byt
 		return b[:n], nil
 	}
 }
-func (dst *ResponseTimeHistogram) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ResponseTimeHistogram.Merge(dst, src)
+func (m *ResponseTimeHistogram) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ResponseTimeHistogram.Merge(m, src)
 }
 func (m *ResponseTimeHistogram) XXX_Size() int {
 	return m.Size()
@@ -761,6 +800,7 @@ func init() {
 	proto.RegisterType((*SlaveAccepted)(nil), "messages.SlaveAccepted")
 	proto.RegisterType((*SlaveRejected)(nil), "messages.SlaveRejected")
 	proto.RegisterType((*StartLoadTest)(nil), "messages.StartLoadTest")
+	proto.RegisterType((*LoadTestUnderway)(nil), "messages.LoadTestUnderway")
 	proto.RegisterType((*MasterFailed)(nil), "messages.MasterFailed")
 	proto.RegisterType((*SlaveFailed)(nil), "messages.SlaveFailed")
 	proto.RegisterType((*SlaveUpdate)(nil), "messages.SlaveUpdate")
@@ -774,6 +814,58 @@ func init() {
 	proto.RegisterType((*ResponseTimeHistogram)(nil), "messages.ResponseTimeHistogram")
 	proto.RegisterMapType((map[int64]int64)(nil), "messages.ResponseTimeHistogram.TimeBinsEntry")
 }
+
+func init() { proto.RegisterFile("loadtest.proto", fileDescriptor_cbef85f58fc0bd9a) }
+
+var fileDescriptor_cbef85f58fc0bd9a = []byte{
+	// 716 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x55, 0x41, 0x4f, 0xdb, 0x4a,
+	0x10, 0x8e, 0x31, 0x09, 0x61, 0x92, 0x3c, 0xf1, 0x56, 0x3c, 0xb0, 0xa2, 0x27, 0x3f, 0x64, 0xbd,
+	0x4a, 0x11, 0x2a, 0xa6, 0x82, 0x0a, 0x55, 0x54, 0x55, 0x95, 0xa4, 0xa0, 0xa6, 0x80, 0x54, 0x39,
+	0xe1, 0xd8, 0xc3, 0x26, 0x59, 0x85, 0x2d, 0xce, 0x6e, 0xea, 0xdd, 0xd0, 0xba, 0xa7, 0x1e, 0xdb,
+	0x5b, 0x7f, 0x46, 0x7f, 0x4a, 0x8f, 0x1c, 0x39, 0x16, 0x73, 0xe9, 0xad, 0xfc, 0x84, 0xca, 0x6b,
+	0x1b, 0x6c, 0x41, 0x85, 0xa5, 0xf6, 0xe6, 0x99, 0x6f, 0xbe, 0x6f, 0x67, 0xbe, 0x99, 0x28, 0xf0,
+	0x97, 0xcb, 0xf1, 0x50, 0x12, 0x21, 0xed, 0x89, 0xc7, 0x25, 0x47, 0xe5, 0x31, 0x11, 0x02, 0x8f,
+	0x88, 0xa8, 0x6f, 0x8d, 0xa8, 0x3c, 0x9a, 0xf6, 0xed, 0x01, 0x1f, 0xaf, 0x37, 0x85, 0xcf, 0x8e,
+	0x3d, 0xce, 0x3a, 0xbd, 0x75, 0x55, 0x86, 0x07, 0x92, 0x7b, 0x6b, 0x23, 0xbe, 0xae, 0x3e, 0xa2,
+	0x9c, 0x88, 0x14, 0xac, 0x07, 0x00, 0x5d, 0x17, 0x9f, 0x10, 0x87, 0xe0, 0xa1, 0x8f, 0x2c, 0x28,
+	0x75, 0x09, 0x1b, 0x12, 0xcf, 0xd0, 0x56, 0xb4, 0x46, 0x65, 0x03, 0x6c, 0x45, 0xb1, 0x5f, 0x76,
+	0x9e, 0x39, 0x31, 0x62, 0x6d, 0x42, 0x4d, 0x31, 0x9a, 0x83, 0x01, 0x99, 0x48, 0x32, 0xcc, 0x45,
+	0xda, 0x8b, 0x49, 0x0e, 0x79, 0x4d, 0x06, 0x39, 0x49, 0x68, 0x09, 0x4a, 0x0e, 0xc1, 0x82, 0x33,
+	0x63, 0x66, 0x45, 0x6b, 0xcc, 0x3b, 0x71, 0xa4, 0x3a, 0x90, 0xd8, 0x93, 0xfb, 0x1c, 0x0f, 0x7b,
+	0x44, 0xc8, 0x5c, 0x1d, 0x6c, 0xc1, 0x42, 0x52, 0x7f, 0x18, 0x26, 0xde, 0xe2, 0x7c, 0xe3, 0xbe,
+	0x80, 0xea, 0x01, 0x16, 0x92, 0x78, 0xbb, 0x98, 0xba, 0xbf, 0xd9, 0x78, 0x07, 0x2a, 0xca, 0x85,
+	0x3f, 0x20, 0xf5, 0x2a, 0x96, 0x3a, 0x9c, 0x0c, 0xb1, 0x24, 0xb9, 0xa4, 0x56, 0x61, 0xa1, 0xc3,
+	0x24, 0xf1, 0xf0, 0x40, 0x52, 0xce, 0xda, 0x7c, 0xca, 0xa4, 0x12, 0xd5, 0x9d, 0x1b, 0x79, 0xab,
+	0x1f, 0xef, 0x6b, 0x97, 0x32, 0x2a, 0x8e, 0x72, 0xf6, 0xba, 0x06, 0xc5, 0xae, 0xc4, 0x52, 0x28,
+	0xd5, 0xca, 0xc6, 0xb2, 0x9d, 0x5c, 0xa7, 0xdd, 0xe6, 0xe3, 0x3e, 0x65, 0x64, 0xa8, 0x60, 0x27,
+	0xaa, 0xb2, 0x9e, 0xc0, 0x72, 0xfb, 0x88, 0x0c, 0x8e, 0x9b, 0xae, 0xab, 0xde, 0x12, 0x6d, 0xce,
+	0x58, 0xee, 0xeb, 0xb0, 0x56, 0x61, 0x76, 0x8f, 0xba, 0x6e, 0xae, 0xda, 0x4f, 0x33, 0x50, 0xcb,
+	0xf4, 0x80, 0xfe, 0x87, 0x5a, 0x8f, 0x4b, 0xec, 0x86, 0xf7, 0xd0, 0xa3, 0x63, 0xa2, 0xc8, 0xba,
+	0x93, 0x4d, 0xa2, 0x6d, 0xa8, 0xa6, 0xac, 0x49, 0x06, 0x5b, 0xba, 0x1e, 0xac, 0x3b, 0x1d, 0x8f,
+	0xb1, 0xe7, 0x47, 0x73, 0x65, 0x6a, 0x51, 0x13, 0xca, 0x0e, 0x79, 0x33, 0x25, 0x42, 0x0a, 0x43,
+	0x5f, 0xd1, 0x1b, 0x95, 0x8d, 0x7b, 0xbf, 0x30, 0xc4, 0x4e, 0xea, 0x76, 0x98, 0xf4, 0x7c, 0xe7,
+	0x8a, 0x56, 0xef, 0x42, 0x2d, 0x03, 0xa1, 0x05, 0xd0, 0x8f, 0x89, 0xaf, 0x7a, 0x9d, 0x77, 0xc2,
+	0x4f, 0x74, 0x1f, 0x8a, 0x27, 0xd8, 0x9d, 0x92, 0x3b, 0x5a, 0x8b, 0x8a, 0xb6, 0x67, 0x1e, 0x69,
+	0xd6, 0x47, 0x1d, 0xaa, 0x69, 0x0c, 0x2d, 0x42, 0x31, 0x3a, 0x86, 0xc8, 0x82, 0x28, 0x08, 0x0f,
+	0x6f, 0xc7, 0xf3, 0xb8, 0x27, 0xe2, 0x1b, 0x89, 0x23, 0xf4, 0x2f, 0xcc, 0x47, 0x1e, 0x85, 0xa6,
+	0xe9, 0x0a, 0xba, 0x4e, 0x20, 0x03, 0xe6, 0x0e, 0x28, 0x53, 0xd8, 0xac, 0xc2, 0x92, 0x50, 0x21,
+	0xf8, 0x9d, 0x42, 0x8a, 0x31, 0x12, 0x85, 0xc8, 0x82, 0xaa, 0x12, 0x68, 0xbb, 0x94, 0x30, 0x29,
+	0x8c, 0x92, 0x82, 0x33, 0x39, 0xb4, 0x0f, 0xd5, 0xe8, 0xfd, 0x96, 0xdf, 0xf3, 0x27, 0xc4, 0x98,
+	0x53, 0x86, 0x36, 0x6e, 0x9f, 0xd6, 0x4e, 0x97, 0x46, 0x9e, 0x66, 0xd8, 0x68, 0x27, 0xf4, 0x55,
+	0x4c, 0x38, 0x13, 0x24, 0xec, 0x40, 0x18, 0x65, 0x65, 0xde, 0x7f, 0xd7, 0x72, 0x69, 0xf8, 0x39,
+	0x15, 0x92, 0x8f, 0x3c, 0x3c, 0x76, 0xb2, 0xac, 0xfa, 0x53, 0xf8, 0xfb, 0xc6, 0x4b, 0xb7, 0xac,
+	0x68, 0x31, 0xbd, 0x22, 0x3d, 0xbd, 0x8a, 0x1f, 0x1a, 0xfc, 0x73, 0xeb, 0x4b, 0xa1, 0x5b, 0x61,
+	0x82, 0x4f, 0x93, 0xad, 0x24, 0x61, 0x88, 0xb4, 0x28, 0xeb, 0xd2, 0xf7, 0x89, 0x5e, 0x12, 0xa2,
+	0x3a, 0x94, 0x5b, 0x34, 0xfe, 0x5d, 0x47, 0x8b, 0xb9, 0x8a, 0x51, 0x07, 0xca, 0xa1, 0x40, 0x8b,
+	0x32, 0x61, 0xcc, 0x2a, 0xef, 0xd6, 0xee, 0x18, 0xd6, 0x4e, 0xea, 0xe3, 0xa3, 0x4c, 0xc2, 0xfa,
+	0x63, 0xa8, 0x65, 0xa0, 0xf4, 0xc4, 0xfa, 0x1d, 0x13, 0xb7, 0x1e, 0x9e, 0x9e, 0x9b, 0x85, 0xb3,
+	0x73, 0xb3, 0x70, 0x79, 0x6e, 0x6a, 0x1f, 0x02, 0x53, 0xfb, 0x12, 0x98, 0xda, 0xd7, 0xc0, 0xd4,
+	0x4e, 0x03, 0x53, 0xfb, 0x16, 0x98, 0xda, 0xf7, 0xc0, 0x2c, 0x5c, 0x06, 0xa6, 0xf6, 0xf9, 0xc2,
+	0x2c, 0x9c, 0x5e, 0x98, 0x85, 0xb3, 0x0b, 0xb3, 0xd0, 0x2f, 0xa9, 0xff, 0xaa, 0xcd, 0x9f, 0x01,
+	0x00, 0x00, 0xff, 0xff, 0x06, 0xa5, 0x23, 0x1a, 0xff, 0x06, 0x00, 0x00,
+}
+
 func (this *SlaveReady) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -873,6 +965,30 @@ func (this *StartLoadTest) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *LoadTestUnderway) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LoadTestUnderway)
+	if !ok {
+		that2, ok := that.(LoadTestUnderway)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Sender.Equal(that1.Sender) {
+		return false
+	}
+	return true
+}
 func (this *MasterFailed) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -949,7 +1065,7 @@ func (this *SlaveUpdate) Equal(that interface{}) bool {
 	if !this.Sender.Equal(that1.Sender) {
 		return false
 	}
-	if !this.Stats.Equal(that1.Stats) {
+	if this.InteractionCount != that1.InteractionCount {
 		return false
 	}
 	return true
@@ -1048,7 +1164,7 @@ func (this *CombinedStats) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.TotalInteractionTime != that1.TotalInteractionTime {
+	if this.TotalTestTime != that1.TotalTestTime {
 		return false
 	}
 	if !this.Interactions.Equal(that1.Interactions) {
@@ -1090,9 +1206,6 @@ func (this *SummaryStats) Equal(that interface{}) bool {
 		return false
 	}
 	if this.TotalTime != that1.TotalTime {
-		return false
-	}
-	if this.AbsTotalTime != that1.AbsTotalTime {
 		return false
 	}
 	if this.MinTime != that1.MinTime {
@@ -1204,6 +1317,18 @@ func (this *StartLoadTest) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
+func (this *LoadTestUnderway) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&messages.LoadTestUnderway{")
+	if this.Sender != nil {
+		s = append(s, "Sender: "+fmt.Sprintf("%#v", this.Sender)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func (this *MasterFailed) GoString() string {
 	if this == nil {
 		return "nil"
@@ -1239,9 +1364,7 @@ func (this *SlaveUpdate) GoString() string {
 	if this.Sender != nil {
 		s = append(s, "Sender: "+fmt.Sprintf("%#v", this.Sender)+",\n")
 	}
-	if this.Stats != nil {
-		s = append(s, "Stats: "+fmt.Sprintf("%#v", this.Stats)+",\n")
-	}
+	s = append(s, "InteractionCount: "+fmt.Sprintf("%#v", this.InteractionCount)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -1290,7 +1413,7 @@ func (this *CombinedStats) GoString() string {
 	}
 	s := make([]string, 0, 7)
 	s = append(s, "&messages.CombinedStats{")
-	s = append(s, "TotalInteractionTime: "+fmt.Sprintf("%#v", this.TotalInteractionTime)+",\n")
+	s = append(s, "TotalTestTime: "+fmt.Sprintf("%#v", this.TotalTestTime)+",\n")
 	if this.Interactions != nil {
 		s = append(s, "Interactions: "+fmt.Sprintf("%#v", this.Interactions)+",\n")
 	}
@@ -1314,12 +1437,11 @@ func (this *SummaryStats) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 13)
+	s := make([]string, 0, 12)
 	s = append(s, "&messages.SummaryStats{")
 	s = append(s, "Count: "+fmt.Sprintf("%#v", this.Count)+",\n")
 	s = append(s, "Errors: "+fmt.Sprintf("%#v", this.Errors)+",\n")
 	s = append(s, "TotalTime: "+fmt.Sprintf("%#v", this.TotalTime)+",\n")
-	s = append(s, "AbsTotalTime: "+fmt.Sprintf("%#v", this.AbsTotalTime)+",\n")
 	s = append(s, "MinTime: "+fmt.Sprintf("%#v", this.MinTime)+",\n")
 	s = append(s, "MaxTime: "+fmt.Sprintf("%#v", this.MaxTime)+",\n")
 	s = append(s, "TotalClients: "+fmt.Sprintf("%#v", this.TotalClients)+",\n")
@@ -1394,9 +1516,9 @@ func (m *SlaveReady) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n1, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n1, err1 := m.Sender.MarshalTo(dAtA[i:])
+		if err1 != nil {
+			return 0, err1
 		}
 		i += n1
 	}
@@ -1422,9 +1544,9 @@ func (m *SlaveAccepted) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n2, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n2, err2 := m.Sender.MarshalTo(dAtA[i:])
+		if err2 != nil {
+			return 0, err2
 		}
 		i += n2
 	}
@@ -1450,9 +1572,9 @@ func (m *SlaveRejected) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n3, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n3, err3 := m.Sender.MarshalTo(dAtA[i:])
+		if err3 != nil {
+			return 0, err3
 		}
 		i += n3
 	}
@@ -1484,11 +1606,39 @@ func (m *StartLoadTest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n4, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n4, err4 := m.Sender.MarshalTo(dAtA[i:])
+		if err4 != nil {
+			return 0, err4
 		}
 		i += n4
+	}
+	return i, nil
+}
+
+func (m *LoadTestUnderway) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LoadTestUnderway) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Sender != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
+		n5, err5 := m.Sender.MarshalTo(dAtA[i:])
+		if err5 != nil {
+			return 0, err5
+		}
+		i += n5
 	}
 	return i, nil
 }
@@ -1512,11 +1662,11 @@ func (m *MasterFailed) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n5, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n6, err6 := m.Sender.MarshalTo(dAtA[i:])
+		if err6 != nil {
+			return 0, err6
 		}
-		i += n5
+		i += n6
 	}
 	if len(m.Reason) > 0 {
 		dAtA[i] = 0x12
@@ -1546,11 +1696,11 @@ func (m *SlaveFailed) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n6, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n7, err7 := m.Sender.MarshalTo(dAtA[i:])
+		if err7 != nil {
+			return 0, err7
 		}
-		i += n6
+		i += n7
 	}
 	if len(m.Reason) > 0 {
 		dAtA[i] = 0x12
@@ -1580,21 +1730,16 @@ func (m *SlaveUpdate) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n7, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n7
-	}
-	if m.Stats != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintLoadtest(dAtA, i, uint64(m.Stats.Size()))
-		n8, err := m.Stats.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n8, err8 := m.Sender.MarshalTo(dAtA[i:])
+		if err8 != nil {
+			return 0, err8
 		}
 		i += n8
+	}
+	if m.InteractionCount != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintLoadtest(dAtA, i, uint64(m.InteractionCount))
 	}
 	return i, nil
 }
@@ -1618,9 +1763,9 @@ func (m *SlaveFinished) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n9, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n9, err9 := m.Sender.MarshalTo(dAtA[i:])
+		if err9 != nil {
+			return 0, err9
 		}
 		i += n9
 	}
@@ -1628,9 +1773,9 @@ func (m *SlaveFinished) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Stats.Size()))
-		n10, err := m.Stats.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n10, err10 := m.Stats.MarshalTo(dAtA[i:])
+		if err10 != nil {
+			return 0, err10
 		}
 		i += n10
 	}
@@ -1656,9 +1801,9 @@ func (m *CheckAllSlavesConnected) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n11, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n11, err11 := m.Sender.MarshalTo(dAtA[i:])
+		if err11 != nil {
+			return 0, err11
 		}
 		i += n11
 	}
@@ -1684,9 +1829,9 @@ func (m *Kill) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Sender.Size()))
-		n12, err := m.Sender.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n12, err12 := m.Sender.MarshalTo(dAtA[i:])
+		if err12 != nil {
+			return 0, err12
 		}
 		i += n12
 	}
@@ -1708,18 +1853,18 @@ func (m *CombinedStats) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.TotalInteractionTime != 0 {
+	if m.TotalTestTime != 0 {
 		dAtA[i] = 0x8
 		i++
-		i = encodeVarintLoadtest(dAtA, i, uint64(m.TotalInteractionTime))
+		i = encodeVarintLoadtest(dAtA, i, uint64(m.TotalTestTime))
 	}
 	if m.Interactions != nil {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.Interactions.Size()))
-		n13, err := m.Interactions.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n13, err13 := m.Interactions.MarshalTo(dAtA[i:])
+		if err13 != nil {
+			return 0, err13
 		}
 		i += n13
 	}
@@ -1743,9 +1888,9 @@ func (m *CombinedStats) MarshalTo(dAtA []byte) (int, error) {
 				dAtA[i] = 0x12
 				i++
 				i = encodeVarintLoadtest(dAtA, i, uint64(v.Size()))
-				n14, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
+				n14, err14 := v.MarshalTo(dAtA[i:])
+				if err14 != nil {
+					return 0, err14
 				}
 				i += n14
 			}
@@ -1784,29 +1929,24 @@ func (m *SummaryStats) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.TotalTime))
 	}
-	if m.AbsTotalTime != 0 {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintLoadtest(dAtA, i, uint64(m.AbsTotalTime))
-	}
 	if m.MinTime != 0 {
-		dAtA[i] = 0x28
+		dAtA[i] = 0x20
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.MinTime))
 	}
 	if m.MaxTime != 0 {
-		dAtA[i] = 0x30
+		dAtA[i] = 0x28
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.MaxTime))
 	}
 	if m.TotalClients != 0 {
-		dAtA[i] = 0x38
+		dAtA[i] = 0x30
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.TotalClients))
 	}
 	if len(m.ErrorsByType) > 0 {
 		for k, _ := range m.ErrorsByType {
-			dAtA[i] = 0x42
+			dAtA[i] = 0x3a
 			i++
 			v := m.ErrorsByType[k]
 			mapSize := 1 + len(k) + sovLoadtest(uint64(len(k))) + 1 + sovLoadtest(uint64(v))
@@ -1821,12 +1961,12 @@ func (m *SummaryStats) MarshalTo(dAtA []byte) (int, error) {
 		}
 	}
 	if m.ResponseTimes != nil {
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x42
 		i++
 		i = encodeVarintLoadtest(dAtA, i, uint64(m.ResponseTimes.Size()))
-		n15, err := m.ResponseTimes.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n15, err15 := m.ResponseTimes.MarshalTo(dAtA[i:])
+		if err15 != nil {
+			return 0, err15
 		}
 		i += n15
 	}
@@ -1946,6 +2086,19 @@ func (m *StartLoadTest) Size() (n int) {
 	return n
 }
 
+func (m *LoadTestUnderway) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Sender != nil {
+		l = m.Sender.Size()
+		n += 1 + l + sovLoadtest(uint64(l))
+	}
+	return n
+}
+
 func (m *MasterFailed) Size() (n int) {
 	if m == nil {
 		return 0
@@ -1990,9 +2143,8 @@ func (m *SlaveUpdate) Size() (n int) {
 		l = m.Sender.Size()
 		n += 1 + l + sovLoadtest(uint64(l))
 	}
-	if m.Stats != nil {
-		l = m.Stats.Size()
-		n += 1 + l + sovLoadtest(uint64(l))
+	if m.InteractionCount != 0 {
+		n += 1 + sovLoadtest(uint64(m.InteractionCount))
 	}
 	return n
 }
@@ -2046,8 +2198,8 @@ func (m *CombinedStats) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.TotalInteractionTime != 0 {
-		n += 1 + sovLoadtest(uint64(m.TotalInteractionTime))
+	if m.TotalTestTime != 0 {
+		n += 1 + sovLoadtest(uint64(m.TotalTestTime))
 	}
 	if m.Interactions != nil {
 		l = m.Interactions.Size()
@@ -2083,9 +2235,6 @@ func (m *SummaryStats) Size() (n int) {
 	}
 	if m.TotalTime != 0 {
 		n += 1 + sovLoadtest(uint64(m.TotalTime))
-	}
-	if m.AbsTotalTime != 0 {
-		n += 1 + sovLoadtest(uint64(m.AbsTotalTime))
 	}
 	if m.MinTime != 0 {
 		n += 1 + sovLoadtest(uint64(m.MinTime))
@@ -2191,6 +2340,16 @@ func (this *StartLoadTest) String() string {
 	}, "")
 	return s
 }
+func (this *LoadTestUnderway) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&LoadTestUnderway{`,
+		`Sender:` + strings.Replace(fmt.Sprintf("%v", this.Sender), "PID", "actor.PID", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
 func (this *MasterFailed) String() string {
 	if this == nil {
 		return "nil"
@@ -2219,7 +2378,7 @@ func (this *SlaveUpdate) String() string {
 	}
 	s := strings.Join([]string{`&SlaveUpdate{`,
 		`Sender:` + strings.Replace(fmt.Sprintf("%v", this.Sender), "PID", "actor.PID", 1) + `,`,
-		`Stats:` + strings.Replace(fmt.Sprintf("%v", this.Stats), "CombinedStats", "CombinedStats", 1) + `,`,
+		`InteractionCount:` + fmt.Sprintf("%v", this.InteractionCount) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2230,7 +2389,7 @@ func (this *SlaveFinished) String() string {
 	}
 	s := strings.Join([]string{`&SlaveFinished{`,
 		`Sender:` + strings.Replace(fmt.Sprintf("%v", this.Sender), "PID", "actor.PID", 1) + `,`,
-		`Stats:` + strings.Replace(fmt.Sprintf("%v", this.Stats), "CombinedStats", "CombinedStats", 1) + `,`,
+		`Stats:` + strings.Replace(this.Stats.String(), "CombinedStats", "CombinedStats", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2270,8 +2429,8 @@ func (this *CombinedStats) String() string {
 	}
 	mapStringForRequests += "}"
 	s := strings.Join([]string{`&CombinedStats{`,
-		`TotalInteractionTime:` + fmt.Sprintf("%v", this.TotalInteractionTime) + `,`,
-		`Interactions:` + strings.Replace(fmt.Sprintf("%v", this.Interactions), "SummaryStats", "SummaryStats", 1) + `,`,
+		`TotalTestTime:` + fmt.Sprintf("%v", this.TotalTestTime) + `,`,
+		`Interactions:` + strings.Replace(this.Interactions.String(), "SummaryStats", "SummaryStats", 1) + `,`,
 		`Requests:` + mapStringForRequests + `,`,
 		`}`,
 	}, "")
@@ -2295,12 +2454,11 @@ func (this *SummaryStats) String() string {
 		`Count:` + fmt.Sprintf("%v", this.Count) + `,`,
 		`Errors:` + fmt.Sprintf("%v", this.Errors) + `,`,
 		`TotalTime:` + fmt.Sprintf("%v", this.TotalTime) + `,`,
-		`AbsTotalTime:` + fmt.Sprintf("%v", this.AbsTotalTime) + `,`,
 		`MinTime:` + fmt.Sprintf("%v", this.MinTime) + `,`,
 		`MaxTime:` + fmt.Sprintf("%v", this.MaxTime) + `,`,
 		`TotalClients:` + fmt.Sprintf("%v", this.TotalClients) + `,`,
 		`ErrorsByType:` + mapStringForErrorsByType + `,`,
-		`ResponseTimes:` + strings.Replace(fmt.Sprintf("%v", this.ResponseTimes), "ResponseTimeHistogram", "ResponseTimeHistogram", 1) + `,`,
+		`ResponseTimes:` + strings.Replace(this.ResponseTimes.String(), "ResponseTimeHistogram", "ResponseTimeHistogram", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2351,7 +2509,7 @@ func (m *SlaveReady) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2379,7 +2537,7 @@ func (m *SlaveReady) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2388,6 +2546,9 @@ func (m *SlaveReady) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2405,6 +2566,9 @@ func (m *SlaveReady) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2434,7 +2598,7 @@ func (m *SlaveAccepted) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2462,7 +2626,7 @@ func (m *SlaveAccepted) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2471,6 +2635,9 @@ func (m *SlaveAccepted) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2488,6 +2655,9 @@ func (m *SlaveAccepted) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2517,7 +2687,7 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2545,7 +2715,7 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2554,6 +2724,9 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2578,7 +2751,7 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2588,6 +2761,9 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2600,6 +2776,9 @@ func (m *SlaveRejected) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2629,7 +2808,7 @@ func (m *StartLoadTest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2657,7 +2836,7 @@ func (m *StartLoadTest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2666,6 +2845,9 @@ func (m *StartLoadTest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2683,6 +2865,98 @@ func (m *StartLoadTest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LoadTestUnderway) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowLoadtest
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LoadTestUnderway: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LoadTestUnderway: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Sender", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowLoadtest
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Sender == nil {
+				m.Sender = &actor.PID{}
+			}
+			if err := m.Sender.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipLoadtest(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2712,7 +2986,7 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2740,7 +3014,7 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2749,6 +3023,9 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2773,7 +3050,7 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2783,6 +3060,9 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2795,6 +3075,9 @@ func (m *MasterFailed) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2824,7 +3107,7 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2852,7 +3135,7 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2861,6 +3144,9 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2885,7 +3171,7 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2895,6 +3181,9 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2907,6 +3196,9 @@ func (m *SlaveFailed) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -2936,7 +3228,7 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -2964,7 +3256,7 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2973,6 +3265,9 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -2984,10 +3279,10 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Stats", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InteractionCount", wireType)
 			}
-			var msglen int
+			m.InteractionCount = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowLoadtest
@@ -2997,25 +3292,11 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				m.InteractionCount |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
-				return ErrInvalidLengthLoadtest
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Stats == nil {
-				m.Stats = &CombinedStats{}
-			}
-			if err := m.Stats.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipLoadtest(dAtA[iNdEx:])
@@ -3023,6 +3304,9 @@ func (m *SlaveUpdate) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -3052,7 +3336,7 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3080,7 +3364,7 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3089,6 +3373,9 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3113,7 +3400,7 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3122,6 +3409,9 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3139,6 +3429,9 @@ func (m *SlaveFinished) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -3168,7 +3461,7 @@ func (m *CheckAllSlavesConnected) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3196,7 +3489,7 @@ func (m *CheckAllSlavesConnected) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3205,6 +3498,9 @@ func (m *CheckAllSlavesConnected) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3222,6 +3518,9 @@ func (m *CheckAllSlavesConnected) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -3251,7 +3550,7 @@ func (m *Kill) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3279,7 +3578,7 @@ func (m *Kill) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3288,6 +3587,9 @@ func (m *Kill) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3305,6 +3607,9 @@ func (m *Kill) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -3334,7 +3639,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3350,9 +3655,9 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TotalInteractionTime", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TotalTestTime", wireType)
 			}
-			m.TotalInteractionTime = 0
+			m.TotalTestTime = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowLoadtest
@@ -3362,7 +3667,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalInteractionTime |= (int64(b) & 0x7F) << shift
+				m.TotalTestTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3381,7 +3686,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3390,6 +3695,9 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3414,7 +3722,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3423,6 +3731,9 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3443,7 +3754,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
+					wire |= uint64(b&0x7F) << shift
 					if b < 0x80 {
 						break
 					}
@@ -3460,7 +3771,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						stringLenmapkey |= (uint64(b) & 0x7F) << shift
+						stringLenmapkey |= uint64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -3470,6 +3781,9 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 						return ErrInvalidLengthLoadtest
 					}
 					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthLoadtest
+					}
 					if postStringIndexmapkey > l {
 						return io.ErrUnexpectedEOF
 					}
@@ -3486,7 +3800,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapmsglen |= (int(b) & 0x7F) << shift
+						mapmsglen |= int(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -3495,7 +3809,7 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 						return ErrInvalidLengthLoadtest
 					}
 					postmsgIndex := iNdEx + mapmsglen
-					if mapmsglen < 0 {
+					if postmsgIndex < 0 {
 						return ErrInvalidLengthLoadtest
 					}
 					if postmsgIndex > l {
@@ -3532,6 +3846,9 @@ func (m *CombinedStats) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthLoadtest
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3559,7 +3876,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3587,7 +3904,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Count |= (int64(b) & 0x7F) << shift
+				m.Count |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3606,7 +3923,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Errors |= (int64(b) & 0x7F) << shift
+				m.Errors |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3625,31 +3942,12 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalTime |= (int64(b) & 0x7F) << shift
+				m.TotalTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
 		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field AbsTotalTime", wireType)
-			}
-			m.AbsTotalTime = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowLoadtest
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.AbsTotalTime |= (int64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MinTime", wireType)
 			}
@@ -3663,12 +3961,12 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MinTime |= (int64(b) & 0x7F) << shift
+				m.MinTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 6:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxTime", wireType)
 			}
@@ -3682,12 +3980,12 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.MaxTime |= (int64(b) & 0x7F) << shift
+				m.MaxTime |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 7:
+		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TotalClients", wireType)
 			}
@@ -3701,12 +3999,12 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalClients |= (int64(b) & 0x7F) << shift
+				m.TotalClients |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 8:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ErrorsByType", wireType)
 			}
@@ -3720,7 +4018,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3729,6 +4027,9 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3749,7 +4050,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
+					wire |= uint64(b&0x7F) << shift
 					if b < 0x80 {
 						break
 					}
@@ -3766,7 +4067,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						stringLenmapkey |= (uint64(b) & 0x7F) << shift
+						stringLenmapkey |= uint64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -3776,6 +4077,9 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 						return ErrInvalidLengthLoadtest
 					}
 					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthLoadtest
+					}
 					if postStringIndexmapkey > l {
 						return io.ErrUnexpectedEOF
 					}
@@ -3791,7 +4095,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapvalue |= (int64(b) & 0x7F) << shift
+						mapvalue |= int64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -3813,7 +4117,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 			}
 			m.ErrorsByType[mapkey] = mapvalue
 			iNdEx = postIndex
-		case 9:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ResponseTimes", wireType)
 			}
@@ -3827,7 +4131,7 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3836,6 +4140,9 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3853,6 +4160,9 @@ func (m *SummaryStats) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -3882,7 +4192,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -3910,7 +4220,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Timeout |= (int64(b) & 0x7F) << shift
+				m.Timeout |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3929,7 +4239,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.BinSize |= (int64(b) & 0x7F) << shift
+				m.BinSize |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3948,7 +4258,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.BinCount |= (int64(b) & 0x7F) << shift
+				m.BinCount |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3967,7 +4277,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -3976,6 +4286,9 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthLoadtest
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthLoadtest
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -3996,7 +4309,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					wire |= (uint64(b) & 0x7F) << shift
+					wire |= uint64(b&0x7F) << shift
 					if b < 0x80 {
 						break
 					}
@@ -4012,7 +4325,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapkey |= (int64(b) & 0x7F) << shift
+						mapkey |= int64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -4027,7 +4340,7 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						mapvalue |= (int64(b) & 0x7F) << shift
+						mapvalue |= int64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -4056,6 +4369,9 @@ func (m *ResponseTimeHistogram) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthLoadtest
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthLoadtest
 			}
 			if (iNdEx + skippy) > l {
@@ -4124,8 +4440,11 @@ func skipLoadtest(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthLoadtest
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthLoadtest
 			}
 			return iNdEx, nil
@@ -4156,6 +4475,9 @@ func skipLoadtest(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthLoadtest
+				}
 			}
 			return iNdEx, nil
 		case 4:
@@ -4174,53 +4496,3 @@ var (
 	ErrInvalidLengthLoadtest = fmt.Errorf("proto: negative length found during unmarshaling")
 	ErrIntOverflowLoadtest   = fmt.Errorf("proto: integer overflow")
 )
-
-func init() { proto.RegisterFile("loadtest.proto", fileDescriptor_loadtest_220077345dc5b600) }
-
-var fileDescriptor_loadtest_220077345dc5b600 = []byte{
-	// 703 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x55, 0xc1, 0x6e, 0xd3, 0x4c,
-	0x10, 0x8e, 0xeb, 0x26, 0x4d, 0x26, 0xc9, 0xaf, 0x9f, 0x55, 0x69, 0xad, 0x08, 0x99, 0x2a, 0x12,
-	0x52, 0x84, 0xa8, 0x8b, 0x52, 0x84, 0x50, 0x11, 0x42, 0x49, 0x68, 0x45, 0x68, 0x2b, 0x21, 0x27,
-	0xdc, 0xd9, 0x24, 0xab, 0x74, 0xa9, 0xb3, 0x1b, 0xbc, 0x9b, 0x8a, 0x70, 0xe2, 0x11, 0xb8, 0xf1,
-	0x0a, 0x1c, 0x78, 0x10, 0x8e, 0x3d, 0xf6, 0x48, 0xd3, 0x0b, 0x37, 0xfa, 0x08, 0xc8, 0xbb, 0x76,
-	0x63, 0x8b, 0xa0, 0x1a, 0xc1, 0xcd, 0x33, 0xdf, 0x37, 0xdf, 0xcc, 0x7c, 0xb3, 0x92, 0xe1, 0x3f,
-	0x8f, 0xe3, 0x81, 0x24, 0x42, 0x3a, 0x63, 0x9f, 0x4b, 0x8e, 0xf2, 0x23, 0x22, 0x04, 0x1e, 0x12,
-	0x51, 0x79, 0x38, 0xa4, 0xf2, 0x68, 0xd2, 0x73, 0xfa, 0x7c, 0xb4, 0xd5, 0x10, 0x53, 0x76, 0xec,
-	0x73, 0xd6, 0xee, 0x6e, 0x29, 0x1a, 0xee, 0x4b, 0xee, 0x6f, 0x0e, 0xf9, 0x96, 0xfa, 0xd0, 0x39,
-	0xa1, 0x15, 0xaa, 0xf7, 0x01, 0x3a, 0x1e, 0x3e, 0x21, 0x2e, 0xc1, 0x83, 0x29, 0xaa, 0x42, 0xae,
-	0x43, 0xd8, 0x80, 0xf8, 0x96, 0xb1, 0x61, 0xd4, 0x8a, 0x75, 0x70, 0x54, 0x89, 0xf3, 0xb2, 0xfd,
-	0xcc, 0x0d, 0x91, 0xea, 0x36, 0x94, 0x55, 0x45, 0xa3, 0xdf, 0x27, 0x63, 0x49, 0x06, 0xa9, 0x8a,
-	0xf6, 0xc3, 0x22, 0x97, 0xbc, 0x21, 0xfd, 0x94, 0x45, 0x68, 0x0d, 0x72, 0x2e, 0xc1, 0x82, 0x33,
-	0x6b, 0x69, 0xc3, 0xa8, 0x15, 0xdc, 0x30, 0x52, 0x13, 0x48, 0xec, 0xcb, 0x03, 0x8e, 0x07, 0x5d,
-	0x22, 0x64, 0xaa, 0x09, 0x5e, 0x40, 0xe9, 0x10, 0x0b, 0x49, 0xfc, 0x3d, 0x4c, 0xbd, 0xbf, 0x1c,
-	0xa0, 0x0d, 0x45, 0xb5, 0xcd, 0x3f, 0x90, 0x7a, 0x1d, 0x4a, 0xbd, 0x1a, 0x0f, 0xb0, 0x24, 0xa9,
-	0xa4, 0x36, 0x21, 0xdb, 0x91, 0x58, 0x0a, 0xa5, 0x54, 0xac, 0xaf, 0x3b, 0xd1, 0x23, 0x70, 0x5a,
-	0x7c, 0xd4, 0xa3, 0x8c, 0x0c, 0x14, 0xec, 0x6a, 0x56, 0xb5, 0x17, 0x5a, 0xbf, 0x47, 0x19, 0x15,
-	0x47, 0x29, 0xc7, 0xfd, 0xc3, 0x1e, 0x4f, 0x60, 0xbd, 0x75, 0x44, 0xfa, 0xc7, 0x0d, 0xcf, 0x53,
-	0xbd, 0x44, 0x8b, 0x33, 0x96, 0xfa, 0xd0, 0xd5, 0xbb, 0xb0, 0xbc, 0x4f, 0x3d, 0x2f, 0x15, 0xf7,
-	0xd3, 0x12, 0x94, 0x13, 0x33, 0xa0, 0x3a, 0xac, 0x76, 0xb9, 0xc4, 0x5e, 0x9b, 0x49, 0xe2, 0xe3,
-	0xbe, 0xa4, 0x9c, 0x75, 0xe9, 0x88, 0x28, 0x0d, 0xd3, 0x5d, 0x88, 0xa1, 0x1d, 0x28, 0xc5, 0x52,
-	0xd1, 0x9a, 0x6b, 0xf3, 0x35, 0x3b, 0x93, 0xd1, 0x08, 0xfb, 0x53, 0xbd, 0x65, 0x82, 0x8b, 0x1a,
-	0x90, 0x77, 0xc9, 0xdb, 0x09, 0x11, 0x52, 0x58, 0xe6, 0x86, 0x59, 0x2b, 0xd6, 0xef, 0xfc, 0xc6,
-	0x1e, 0x27, 0xe2, 0xed, 0x32, 0xe9, 0x4f, 0xdd, 0xab, 0xb2, 0x4a, 0x07, 0xca, 0x09, 0x08, 0xfd,
-	0x0f, 0xe6, 0x31, 0x99, 0xaa, 0x91, 0x0b, 0x6e, 0xf0, 0x89, 0xee, 0x41, 0xf6, 0x04, 0x7b, 0x13,
-	0x72, 0xcd, 0x68, 0x9a, 0xb4, 0xb3, 0xf4, 0xc8, 0xa8, 0x7e, 0x31, 0xa1, 0x14, 0xc7, 0xd0, 0x2a,
-	0x64, 0x5b, 0x7c, 0xc2, 0x64, 0xe8, 0x84, 0x0e, 0x82, 0x97, 0xb8, 0xeb, 0xfb, 0xdc, 0xd7, 0x4b,
-	0x9b, 0x6e, 0x18, 0xa1, 0x5b, 0x50, 0x50, 0x56, 0x29, 0xef, 0x4c, 0x05, 0xcd, 0x13, 0xa8, 0x0a,
-	0xa5, 0x46, 0x4f, 0xcc, 0x09, 0xcb, 0x8a, 0x90, 0xc8, 0x21, 0x0b, 0x56, 0x0e, 0xa9, 0xf6, 0x3e,
-	0xab, 0xe0, 0x28, 0x54, 0x08, 0x7e, 0xa7, 0x90, 0x5c, 0x88, 0xe8, 0x30, 0xd0, 0x55, 0x02, 0x2d,
-	0x8f, 0x12, 0x26, 0x85, 0xb5, 0xa2, 0x75, 0xe3, 0x39, 0x74, 0x00, 0x25, 0x3d, 0x63, 0x73, 0xda,
-	0x9d, 0x8e, 0x89, 0x95, 0x57, 0xa6, 0xd7, 0x16, 0x3b, 0xe2, 0xc4, 0xa9, 0xda, 0xf7, 0x44, 0x35,
-	0xda, 0x0d, 0xbc, 0x17, 0x63, 0xce, 0x04, 0x09, 0x26, 0x10, 0x56, 0x41, 0x19, 0x7c, 0x7b, 0x2e,
-	0x17, 0x87, 0x9f, 0x53, 0x21, 0xf9, 0xd0, 0xc7, 0x23, 0x37, 0x59, 0x55, 0x79, 0x0a, 0x37, 0x7e,
-	0xe9, 0xb4, 0xe0, 0x8c, 0xab, 0xf1, 0x33, 0x9a, 0xf1, 0x73, 0xfd, 0x30, 0xe0, 0xe6, 0xc2, 0x4e,
-	0x81, 0x5b, 0x41, 0x82, 0x4f, 0xa2, 0xcb, 0x45, 0x61, 0x80, 0x34, 0x29, 0xeb, 0xd0, 0xf7, 0x91,
-	0x5e, 0x14, 0xa2, 0x0a, 0xe4, 0x9b, 0x94, 0xe9, 0x73, 0xeb, 0xe3, 0x5d, 0xc5, 0xa8, 0x0d, 0xf9,
-	0x40, 0xa0, 0x49, 0x99, 0xb0, 0x96, 0x95, 0x77, 0x9b, 0xd7, 0x2c, 0xeb, 0x44, 0xfc, 0xf0, 0xe1,
-	0x46, 0x61, 0xe5, 0x31, 0x94, 0x13, 0x50, 0x7c, 0x63, 0xf3, 0x9a, 0x8d, 0x9b, 0x0f, 0x4e, 0xcf,
-	0xed, 0xcc, 0xd9, 0xb9, 0x9d, 0xb9, 0x3c, 0xb7, 0x8d, 0x0f, 0x33, 0xdb, 0xf8, 0x3c, 0xb3, 0x8d,
-	0xaf, 0x33, 0xdb, 0x38, 0x9d, 0xd9, 0xc6, 0xb7, 0x99, 0x6d, 0x7c, 0x9f, 0xd9, 0x99, 0xcb, 0x99,
-	0x6d, 0x7c, 0xbc, 0xb0, 0x33, 0xa7, 0x17, 0x76, 0xe6, 0xec, 0xc2, 0xce, 0xf4, 0x72, 0xea, 0x47,
-	0xb5, 0xfd, 0x33, 0x00, 0x00, 0xff, 0xff, 0x8e, 0x75, 0x92, 0x16, 0xfc, 0x06, 0x00, 0x00,
-}

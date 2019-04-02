@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 EXIT_CODE=0
 SLEEP=${SLEEP:-3}

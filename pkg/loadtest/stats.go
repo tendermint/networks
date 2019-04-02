@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,31 +36,27 @@ type FlattenedError struct {
 // CalculatedStats includes a number of parameters that can be calculated from a
 // `messages.SummaryStats` object.
 type CalculatedStats struct {
-	AvgTotalClientTime    float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
-	AvgAbsTotalClientTime float64           // Average total time waiting for client's interactions/requests to complete, including wait times.
-	CountPerClient        float64           // Number of interactions/requests per client.
-	AvgTimePerClient      float64           // Average time per interaction/request per client.
-	AvgAbsTimePerClient   float64           // Average time per interaction/request per client, including wait times.
-	PerSecPerClient       float64           // Interactions/requests per second per client.
-	AbsPerSecPerClient    float64           // Interactions/requests per second per client, including wait times.
-	PerSec                float64           // Interactions/requests per second overall.
-	AbsPerSec             float64           // Interactions/requests per second overall, including wait times.
-	FailureRate           float64           // The % of interactions/requests that failed.
-	TopErrors             []*FlattenedError // The top 10 errors by error count.
+	AvgTotalClientTime float64           // Average total time that we were waiting for a single client's interactions/requests to complete.
+	CountPerClient     float64           // Number of interactions/requests per client.
+	AvgTimePerClient   float64           // Average time per interaction/request per client.
+	PerSecPerClient    float64           // Interactions/requests per second per client.
+	PerSec             float64           // Interactions/requests per second overall.
+	AbsPerSec          float64           // Interactions/requests per second overall, including wait times.
+	FailureRate        float64           // The % of interactions/requests that failed.
+	TopErrors          []*FlattenedError // The top 10 errors by error count.
 }
 
 // PrometheusStats encapsulates all of the statistics we retrieved from the
 // Prometheus endpoints for our target nodes.
 type PrometheusStats struct {
-	StartTime       time.Time                         // When was the load test started?
-	TargetNodeStats map[string][]*NodePrometheusStats // Target node stats organized by hostname.
+	StartTime                time.Time                      // When was the load test started?
+	MetricFamilyDescriptions map[string]string              // Mapping of metric family ID -> description
+	TargetNodesStats         map[string]NodePrometheusStats // Target node stats organized by hostname.
 }
 
-// NodePrometheusStats represents a single test network node's stats from its Prometheus endpoint.
-type NodePrometheusStats struct {
-	Timestamp      time.Time
-	MetricFamilies map[string]*pdto.MetricFamily
-}
+// NodePrometheusStats represents a single test network node's stats from its
+// Prometheus endpoint. The mapping goes "Metric family ID -> Seconds since test start -> Data point"
+type NodePrometheusStats map[string]map[int64]float64
 
 // NewSummaryStats instantiates an empty, configured SummaryStats object.
 func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.SummaryStats {
@@ -71,9 +68,8 @@ func NewSummaryStats(timeout time.Duration, totalClients int64) *messages.Summar
 }
 
 // AddStatistic adds a single statistic to the given SummaryStats object.
-func AddStatistic(stats *messages.SummaryStats, timeTaken, absTimeTaken time.Duration, err error) {
+func AddStatistic(stats *messages.SummaryStats, timeTaken time.Duration, err error) {
 	timeTakenNs := int64(timeTaken) / int64(time.Nanosecond)
-	absTimeTakenNs := int64(absTimeTaken) / int64(time.Nanosecond)
 	// we cap the time taken at the response timeout
 	if timeTakenNs > stats.ResponseTimes.Timeout {
 		timeTakenNs = stats.ResponseTimes.Timeout
@@ -93,7 +89,6 @@ func AddStatistic(stats *messages.SummaryStats, timeTaken, absTimeTaken time.Dur
 
 	stats.Count++
 	stats.TotalTime += timeTakenNs
-	stats.AbsTotalTime += absTimeTakenNs
 
 	if err != nil {
 		stats.Errors++
@@ -122,7 +117,6 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 	dest.Count += src.Count
 	dest.Errors += src.Errors
 	dest.TotalTime += src.TotalTime
-	dest.AbsTotalTime += src.AbsTotalTime
 	dest.TotalClients += src.TotalClients
 
 	if src.MinTime < dest.MinTime {
@@ -152,7 +146,9 @@ func MergeSummaryStats(dest, src *messages.SummaryStats) {
 // MergeCombinedStats will merge the given src CombinedStats object's contents
 // into the dest object.
 func MergeCombinedStats(dest, src *messages.CombinedStats) {
-	dest.TotalInteractionTime += src.TotalInteractionTime
+	if src.TotalTestTime > dest.TotalTestTime {
+		dest.TotalTestTime = src.TotalTestTime
+	}
 	MergeSummaryStats(dest.Interactions, src.Interactions)
 	for srcReqName, srcReqStats := range src.Requests {
 		MergeSummaryStats(dest.Requests[srcReqName], srcReqStats)
@@ -170,53 +166,47 @@ func FlattenedSortedErrors(stats *messages.SummaryStats) []*FlattenedError {
 	return errorsByType
 }
 
-func CalculateStats(stats *messages.SummaryStats) *CalculatedStats {
+func CalculateStats(stats *messages.SummaryStats, totalTestTime int64) *CalculatedStats {
 	// average total time for all cumulative interactions/requests per client
 	avgTotalClientTime := math.Round(float64(stats.TotalTime) / float64(stats.TotalClients))
-	avgAbsTotalClientTime := math.Round(float64(stats.AbsTotalTime) / float64(stats.TotalClients))
 	// number of interactions/requests per client
 	countPerClient := math.Round(float64(stats.Count) / float64(stats.TotalClients))
 	// average time per interaction/request per client
 	avgTimePerClient := float64(0)
-	avgAbsTimePerClient := float64(0)
 	if countPerClient > 0 {
 		avgTimePerClient = avgTotalClientTime / countPerClient
-		avgAbsTimePerClient = avgAbsTotalClientTime / countPerClient
 	}
 	// interactions/requests per second per client
 	perSecPerClient := float64(0)
-	absPerSecPerClient := float64(0)
 	if avgTotalClientTime > 0 {
 		perSecPerClient = 1 / (avgTimePerClient / float64(time.Second))
-		absPerSecPerClient = 1 / (avgAbsTimePerClient / float64(time.Second))
 	}
 	// interactions/requests per second overall
 	perSec := perSecPerClient * float64(stats.TotalClients)
-	absPerSec := absPerSecPerClient * float64(stats.TotalClients)
+	absPerSec := float64(0)
+	if totalTestTime > 0 {
+		absPerSec = float64(stats.Count) / time.Duration(totalTestTime).Seconds()
+	}
 	return &CalculatedStats{
-		AvgTotalClientTime:    avgTotalClientTime,
-		AvgAbsTotalClientTime: avgAbsTotalClientTime,
-		CountPerClient:        countPerClient,
-		AvgTimePerClient:      avgTimePerClient,
-		AvgAbsTimePerClient:   avgAbsTimePerClient,
-		PerSecPerClient:       perSecPerClient,
-		AbsPerSecPerClient:    absPerSecPerClient,
-		PerSec:                perSec,
-		AbsPerSec:             absPerSec,
-		FailureRate:           float64(100) * (float64(stats.Errors) / float64(stats.Count)),
-		TopErrors:             FlattenedSortedErrors(stats),
+		AvgTotalClientTime: avgTotalClientTime,
+		CountPerClient:     countPerClient,
+		AvgTimePerClient:   avgTimePerClient,
+		PerSecPerClient:    perSecPerClient,
+		PerSec:             perSec,
+		AbsPerSec:          absPerSec,
+		FailureRate:        float64(100) * (float64(stats.Errors) / float64(stats.Count)),
+		TopErrors:          FlattenedSortedErrors(stats),
 	}
 }
 
 // LogSummaryStats is a utility function for displaying summary statistics
 // through the logging interface. This is useful when working with tm-load-test
 // from the command line.
-func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.SummaryStats) {
-	cs := CalculateStats(stats)
+func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.SummaryStats, totalTestTime int64) {
+	cs := CalculateStats(stats, totalTestTime)
 
 	logger.Info(logPrefix+" total clients", "value", stats.TotalClients)
 	logger.Info(logPrefix+" per second per client", "value", fmt.Sprintf("%.2f", cs.PerSecPerClient))
-	logger.Info(logPrefix+" per second per client (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient))
 	logger.Info(logPrefix+" per second overall", "value", fmt.Sprintf("%.2f", cs.PerSec))
 	logger.Info(logPrefix+" per second overall (absolute)", "value", fmt.Sprintf("%.2f", cs.AbsPerSec))
 	logger.Info(logPrefix+" count", "value", stats.Count)
@@ -235,13 +225,13 @@ func LogSummaryStats(logger logging.Logger, logPrefix string, stats *messages.Su
 func LogStats(logger logging.Logger, stats *messages.CombinedStats) {
 	logger.Info("")
 	logger.Info("INTERACTION STATISTICS")
-	LogSummaryStats(logger, "Interactions", stats.Interactions)
+	LogSummaryStats(logger, "Interactions", stats.Interactions, stats.TotalTestTime)
 
 	logger.Info("")
 	logger.Info("REQUEST STATISTICS")
 	for reqName, reqStats := range stats.Requests {
 		logger.Info(reqName)
-		LogSummaryStats(logger, "  Requests", reqStats)
+		LogSummaryStats(logger, "  Requests", reqStats, stats.TotalTestTime)
 		logger.Info("")
 	}
 }
@@ -263,19 +253,45 @@ func NewResponseTimeHistogram(timeout time.Duration) *messages.ResponseTimeHisto
 	}
 }
 
+// FlattenResponseTimeHistogram will take the given histogram object and convert
+// it into two flattened arrays, where the first returned array will be the bins
+// and the second will be the counts.
+func FlattenResponseTimeHistogram(h *messages.ResponseTimeHistogram, indent string) (string, string) {
+	bins, counts := indent, indent
+	for i := int64(0); i < h.BinCount; i++ {
+		bin := h.BinSize * i
+		bins += fmt.Sprintf("%d", time.Duration(bin)/time.Millisecond)
+		counts += fmt.Sprintf("%d", h.TimeBins[bin])
+
+		if i < (h.BinCount - 1) {
+			bins += ", "
+			counts += ", "
+		}
+
+		if (i+1)%10 == 0 {
+			bins += "\n" + indent
+			counts += "\n" + indent
+		}
+	}
+	return bins, counts
+}
+
 // WriteSummaryStats will write the given summary statistics using the specified
 // CSV writer.
-func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats) error {
-	cs := CalculateStats(stats)
+func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, stats *messages.SummaryStats, totalTestTime int64) error {
+	cs := CalculateStats(stats, totalTestTime)
 	indent := strings.Repeat(" ", indentCount)
 	prefix := indent + linePrefix
+	if err := writer.Write([]string{prefix + " total time", (time.Duration(stats.TotalTime) * time.Nanosecond).String()}); err != nil {
+		return err
+	}
+	if err := writer.Write([]string{prefix + " total time (absolute)", (time.Duration(totalTestTime) * time.Nanosecond).String()}); err != nil {
+		return err
+	}
 	if err := writer.Write([]string{prefix + " total clients", fmt.Sprintf("%d", stats.TotalClients)}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " per second per client", fmt.Sprintf("%.2f", cs.PerSecPerClient)}); err != nil {
-		return err
-	}
-	if err := writer.Write([]string{prefix + " per second per client (absolute)", fmt.Sprintf("%.2f", cs.AbsPerSecPerClient)}); err != nil {
 		return err
 	}
 	if err := writer.Write([]string{prefix + " per second overall", fmt.Sprintf("%.2f", cs.PerSec)}); err != nil {
@@ -299,7 +315,7 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	if err := writer.Write([]string{prefix + " max time", (time.Duration(stats.MaxTime) * time.Nanosecond).String()}); err != nil {
 		return err
 	}
-	if err := writer.Write([]string{prefix + " top errors:"}); err != nil {
+	if err := writer.Write([]string{prefix + " top errors:", ""}); err != nil {
 		return err
 	}
 	for i := 0; i < len(cs.TopErrors) && i < 10; i++ {
@@ -307,7 +323,7 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 			return err
 		}
 	}
-	if err := writer.Write([]string{prefix + " response time histogram (milliseconds/count):"}); err != nil {
+	if err := writer.Write([]string{prefix + " response time histogram (milliseconds/count):", ""}); err != nil {
 		return err
 	}
 	for bin := int64(0); bin <= stats.ResponseTimes.Timeout; bin += stats.ResponseTimes.BinSize {
@@ -321,41 +337,230 @@ func WriteSummaryStats(writer *csv.Writer, indentCount int, linePrefix string, s
 	return nil
 }
 
+// ParseSummaryStats will attempt to read a `*messages.SummaryStats` object from
+// the given set of rows/columns (assuming they're from a CSV file), and on
+// success will return that object and the number of lines read from the CSV
+// reader. Otherwise an error will be returned.
+//
+// NOTE: Only a single `*messages.SummaryStats` object will be parsed from the
+// given set of rows. The moment one full object has been parsed, the function
+// will return.
+func ParseSummaryStats(rows [][]string) (*messages.SummaryStats, int, int64, error) {
+	var totalTestTime int64
+	curRow, rowCount := 0, len(rows)
+	parseNextVal := func() (string, string, error) {
+		defer func() { curRow++ }()
+		if curRow >= rowCount {
+			return "", "", fmt.Errorf("Missing rows in CSV data")
+		}
+		if len(rows[curRow]) < 2 {
+			return "", "", fmt.Errorf("Missing column in CSV data")
+		}
+		return rows[curRow][0], rows[curRow][1], nil
+	}
+	parseInt := func() (string, int64, error) {
+		desc, v, err := parseNextVal()
+		if err != nil {
+			return "", 0, err
+		}
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return "", 0, fmt.Errorf("%s -> %s", desc, err)
+		}
+		return desc, i, err
+	}
+	parseDuration := func() (string, int64, error) {
+		desc, v, err := parseNextVal()
+		if err != nil {
+			return "", 0, err
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return "", 0, err
+		}
+		return desc, d.Nanoseconds(), nil
+	}
+
+	stats := &messages.SummaryStats{}
+	var err error
+
+	_, stats.TotalTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, 0, err
+	}
+	// skip the absolute total test time field here
+	_, totalTestTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, 0, err
+	}
+	_, stats.TotalClients, err = parseInt()
+	if err != nil {
+		return nil, curRow, 0, err
+	}
+
+	// skip the computed rows
+	curRow += 3
+
+	_, stats.Count, err = parseInt()
+	if err != nil {
+		return nil, curRow, 0, err
+	}
+	_, stats.Errors, err = parseInt()
+	if err != nil {
+		return nil, curRow, 0, err
+	}
+
+	// skip the failure rate % row
+	curRow++
+
+	_, stats.MinTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, 0, fmt.Errorf("Failed to parse min time field: %s", err)
+	}
+	_, stats.MaxTime, err = parseDuration()
+	if err != nil {
+		return nil, curRow, 0, fmt.Errorf("Failed to parse max time field: %s", err)
+	}
+
+	// read the top errors
+	stats.ErrorsByType = make(map[string]int64)
+	// skip the "top errors:" line
+	curRow++
+	for curRow < rowCount {
+		if len(rows[curRow]) == 0 {
+			return nil, curRow, 0, fmt.Errorf("Missing rows in CSV data")
+		}
+		if strings.Contains(rows[curRow][0], "response time histogram") {
+			break
+		}
+		desc, count, err := parseInt()
+		if err != nil {
+			return nil, curRow, 0, err
+		}
+		stats.ErrorsByType[desc] = count
+	}
+
+	// read the response time histogram
+	stats.ResponseTimes = &messages.ResponseTimeHistogram{}
+	stats.ResponseTimes.TimeBins = make(map[int64]int64)
+	curBin, prevBin := int64(0), int64(0)
+	curRow++
+	for curRow < rowCount {
+		// it's a sign we've hit the end of the histogram
+		if isEmptyCSVRow(rows[curRow]) {
+			break
+		}
+		binLabel, count, err := parseInt()
+		if err != nil {
+			return nil, curRow, 0, err
+		}
+		prevBin = curBin
+		curBin, err = strconv.ParseInt(strings.Trim(binLabel, " "), 10, 64)
+		if err != nil {
+			return nil, curRow, 0, err
+		}
+		// convert to nanoseconds
+		curBin = (time.Duration(curBin) * time.Millisecond).Nanoseconds()
+		stats.ResponseTimes.TimeBins[curBin] = count
+	}
+	// we assume the final bin is our timeout
+	stats.ResponseTimes.Timeout = curBin
+	stats.ResponseTimes.BinCount = int64(len(stats.ResponseTimes.TimeBins))
+	stats.ResponseTimes.BinSize = curBin - prevBin
+
+	return stats, curRow, totalTestTime, nil
+}
+
 // WriteCombinedStats will write the given combined statistics using the
 // specified writer.
 func WriteCombinedStats(writer io.Writer, stats *messages.CombinedStats) error {
 	cw := csv.NewWriter(writer)
 	defer cw.Flush()
 
-	if err := cw.Write([]string{"INTERACTION STATISTICS"}); err != nil {
+	if err := cw.Write([]string{"INTERACTION STATISTICS", ""}); err != nil {
 		return err
 	}
-	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions); err != nil {
+	if err := WriteSummaryStats(cw, 0, "Interactions", stats.Interactions, stats.TotalTestTime); err != nil {
 		return err
 	}
 
-	if err := cw.Write([]string{}); err != nil {
+	if err := cw.Write([]string{"", ""}); err != nil {
 		return err
 	}
-	if err := cw.Write([]string{"REQUEST STATISTICS"}); err != nil {
+	if err := cw.Write([]string{"REQUEST STATISTICS", ""}); err != nil {
 		return err
 	}
 	i := 0
 	for reqName, reqStats := range stats.Requests {
 		if i > 0 {
-			if err := cw.Write([]string{}); err != nil {
+			if err := cw.Write([]string{"", ""}); err != nil {
 				return err
 			}
 		}
-		if err := cw.Write([]string{reqName}); err != nil {
+		if err := cw.Write([]string{reqName, ""}); err != nil {
 			return err
 		}
-		if err := WriteSummaryStats(cw, 2, "Requests", reqStats); err != nil {
+		if err := WriteSummaryStats(cw, 2, "Requests", reqStats, stats.TotalTestTime); err != nil {
 			return err
 		}
 		i++
 	}
 	return nil
+}
+
+func isEmptyCSVRow(row []string) bool {
+	for _, col := range row {
+		if len(col) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// ReadCombinedStats will attempt to read a CombinedStats object from the given
+// reader, assuming it's in CSV format, or return an error.
+func ReadCombinedStats(r io.Reader) (*messages.CombinedStats, error) {
+	var totalTestTime int64
+	cr := csv.NewReader(r)
+	curRow := 0
+	// read all the data
+	rows, err := cr.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	// skip the "INTERACTION STATISTICS" heading
+	curRow++
+	istats, rowsRead, totalTestTime, err := ParseSummaryStats(rows[curRow:])
+	if err != nil {
+		return nil, err
+	}
+	curRow += rowsRead
+
+	// skip the empty row and the "REQUEST STATISTICS" line
+	curRow += 2
+
+	// read the requests' statistics
+	rstats := make(map[string]*messages.SummaryStats)
+	for curRow < len(rows) {
+		// read the request name from this row
+		reqName := rows[curRow][0]
+		curRow++
+		curStats, rowsRead, _, err := ParseSummaryStats(rows[curRow:])
+		if err != nil {
+			return nil, err
+		}
+		curRow += rowsRead
+		rstats[reqName] = curStats
+		// skip any subsequent empty rows
+		for curRow < len(rows) && isEmptyCSVRow(rows[curRow]) {
+			curRow++
+		}
+	}
+	return &messages.CombinedStats{
+		TotalTestTime: totalTestTime,
+		Interactions:  istats,
+		Requests:      rstats,
+	}, nil
 }
 
 // WriteCombinedStatsToFile will write the given stats object to the specified
@@ -373,6 +578,17 @@ func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) 
 	return WriteCombinedStats(f, stats)
 }
 
+// ReadCombinedStatsFromFile will read the combined stats from the given CSV
+// file on success, or return an error.
+func ReadCombinedStatsFromFile(csvFile string) (*messages.CombinedStats, error) {
+	f, err := os.Open(csvFile)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return ReadCombinedStats(f)
+}
+
 //
 // NodePrometheusStats
 //
@@ -380,29 +596,74 @@ func WriteCombinedStatsToFile(outputFile string, stats *messages.CombinedStats) 
 // GetNodePrometheusStats will perform a blocking GET request to the given URL
 // to fetch the text-formatted Prometheus metrics for a particular node, parse
 // those metrics, and then either return the parsed metrics or an error.
-func GetNodePrometheusStats(c *http.Client, url string) (*NodePrometheusStats, error) {
-	stats := &NodePrometheusStats{
-		Timestamp:      time.Now(),
-		MetricFamilies: nil,
-	}
-	resp, err := c.Get(url)
+func GetNodePrometheusStats(c *http.Client, endpoint *PrometheusEndpoint, ts int64) (NodePrometheusStats, map[string]string, error) {
+	stats := make(NodePrometheusStats)
+	descriptions := make(map[string]string)
+	resp, err := c.Get(endpoint.URL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("Non-OK response from URL: %s (%d)", resp.Status, resp.StatusCode)
+		return nil, nil, fmt.Errorf("Non-OK response from URL: %s (%d)", resp.Status, resp.StatusCode)
 	}
 
 	parser := &expfmt.TextParser{}
-	mf, err := parser.TextToMetricFamilies(resp.Body)
+	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	stats.MetricFamilies = mf
+	for mfID, mf := range metricFamilies {
+		fullID := fmt.Sprintf("%s:%s", endpoint.ID, mfID)
+		stats[fullID] = make(map[int64]float64)
+		switch mf.GetType() {
+		case pdto.MetricType_COUNTER:
+			stats[fullID][ts] = mf.GetMetric()[0].GetCounter().GetValue()
+			descriptions[mfID] = mf.GetHelp()
 
-	return stats, nil
+		case pdto.MetricType_GAUGE:
+			stats[fullID][ts] = mf.GetMetric()[0].GetGauge().GetValue()
+			descriptions[mfID] = mf.GetHelp()
+		}
+	}
+
+	return stats, descriptions, nil
+}
+
+// Merge will incorporate the given `src` object's metric families' stats into
+// this one.
+func (s NodePrometheusStats) Merge(src NodePrometheusStats) {
+	if src == nil || len(src) == 0 {
+		return
+	}
+	for srcName, srcMF := range src {
+		if _, ok := s[srcName]; !ok {
+			s[srcName] = make(map[int64]float64)
+		}
+		for ts, val := range srcMF {
+			s[srcName][ts] = val
+		}
+	}
+}
+
+// ExtractTimestamps will extract the timestamps from the given
+// NodePrometheusStats map.
+func (s NodePrometheusStats) ExtractTimestamps() []int64 {
+	timestamps := make([]int64, 0)
+	uniqueTimestamps := make(map[int64]interface{})
+	for _, mf := range s {
+		for ts := range mf {
+			uniqueTimestamps[ts] = nil
+		}
+	}
+	for ts := range uniqueTimestamps {
+		timestamps = append(timestamps, ts)
+	}
+	sort.SliceStable(timestamps[:], func(i, j int) bool {
+		return timestamps[i] < timestamps[j]
+	})
+	return timestamps
 }
 
 //
@@ -410,19 +671,52 @@ func GetNodePrometheusStats(c *http.Client, url string) (*NodePrometheusStats, e
 //
 
 type nodePrometheusStats struct {
-	hostID string
-	stats  *NodePrometheusStats
+	hostID       string
+	descriptions map[string]string // Metric family description
+	stats        NodePrometheusStats
 }
 
-func collectPrometheusStats(c *http.Client, hostID, nodeURL string, statsc chan nodePrometheusStats, logger logging.Logger) {
-	stats, err := GetNodePrometheusStats(c, nodeURL)
-	if err == nil {
-		statsc <- nodePrometheusStats{
-			hostID: hostID,
-			stats:  stats,
+func collectPrometheusStats(c *http.Client, hostID string, endpoints []*PrometheusEndpoint, ts time.Duration, statsc chan nodePrometheusStats, logger logging.Logger) {
+	resultStats := make(NodePrometheusStats)
+	descriptions := make(map[string]string)
+	timestamp := int64(math.Round(ts.Seconds()))
+
+	for _, endpoint := range endpoints {
+		stats, desc, err := GetNodePrometheusStats(c, endpoint, timestamp)
+		if err == nil {
+			resultStats.Merge(stats)
+			for mfID, mfDesc := range desc {
+				descriptions[mfID] = mfDesc
+			}
+		} else {
+			logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
 		}
-	} else {
-		logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
+	}
+
+	statsc <- nodePrometheusStats{
+		hostID:       hostID,
+		descriptions: descriptions,
+		stats:        resultStats,
+	}
+}
+
+// NewPrometheusStats creates a new, ready-to-use PrometheusStats object.
+func NewPrometheusStats() *PrometheusStats {
+	return &PrometheusStats{
+		MetricFamilyDescriptions: make(map[string]string),
+		TargetNodesStats:         make(map[string]NodePrometheusStats),
+	}
+}
+
+// Merge will take the given `nodePrometheusStats` object and merge its contents
+// with what `ps` currently has.
+func (ps *PrometheusStats) Merge(s nodePrometheusStats) {
+	if _, ok := ps.TargetNodesStats[s.hostID]; !ok {
+		ps.TargetNodesStats[s.hostID] = make(NodePrometheusStats)
+	}
+	ps.TargetNodesStats[s.hostID].Merge(s.stats)
+	for mfID, mfDesc := range s.descriptions {
+		ps.MetricFamilyDescriptions[mfID] = mfDesc
 	}
 }
 
@@ -446,15 +740,15 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 		collectorShutdownc := make(chan bool, 1)
 		collectorsShutdownc = append(collectorsShutdownc, collectorShutdownc)
 		wg.Add(1)
-		go func(client *http.Client, hostID, nodeURL string, csc chan bool) {
-			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURL", nodeURL)
+		go func(client *http.Client, hostID string, endpoints []*PrometheusEndpoint, csc chan bool) {
+			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURLs", endpoints)
 			// fire off an initial request for stats (prior to first tick)
-			collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+			collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
 		collectorLoop:
 			for {
 				select {
 				case <-ticker.C:
-					collectPrometheusStats(client, hostID, nodeURL, statsc, logger)
+					collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
 
 				case <-csc:
 					logger.Debug("Shutting down collector goroutine", "hostID", hostID)
@@ -462,7 +756,7 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 				}
 			}
 			wg.Done()
-		}(c, node.ID, node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort), collectorShutdownc)
+		}(c, node.ID, node.GetPrometheusEndpoints(), collectorShutdownc)
 	}
 	logger.Debug("Prometheus collectors started")
 
@@ -470,7 +764,7 @@ collectorsLoop:
 	for {
 		select {
 		case nodeStats := <-statsc:
-			ps.TargetNodeStats[nodeStats.hostID] = append(ps.TargetNodeStats[nodeStats.hostID], nodeStats.stats)
+			ps.Merge(nodeStats)
 
 		case <-shutdownc:
 			logger.Debug("Shutdown signal received by Prometheus collector loop")
@@ -492,11 +786,14 @@ collectorsLoop:
 	logger.Debug("Doing one final Prometheus stats collection from each node")
 	// do one final collection from each node
 	for i, node := range cfg.TestNetwork.Targets {
-		nodeStats, err := GetNodePrometheusStats(clients[i], node.GetPrometheusURL(cfg.TestNetwork.PrometheusPort))
-		if err != nil {
-			logger.Error("Failed to fetch Prometheus statistics", "hostID", node.ID, "err", err)
-		} else {
-			ps.TargetNodeStats[node.ID] = append(ps.TargetNodeStats[node.ID], nodeStats)
+		finalStatsc := make(chan nodePrometheusStats, 1)
+		go collectPrometheusStats(clients[i], node.ID, node.GetPrometheusEndpoints(), time.Since(ps.StartTime), finalStatsc, logger)
+		select {
+		case nodeStats := <-finalStatsc:
+			ps.Merge(nodeStats)
+
+		case <-time.After(time.Duration(cfg.TestNetwork.PrometheusPollTimeout)):
+			logger.Error("Timed out waiting for final Prometheus polling operation to complete", "hostID", node.ID)
 		}
 	}
 
@@ -504,43 +801,19 @@ collectorsLoop:
 	donec <- true
 }
 
-func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats []*NodePrometheusStats) error {
-	// first extract a sorted list of the metric families for this node
-	familyNames := make(map[string]string)
+func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, familyDescriptions map[string]string, nodeStats NodePrometheusStats) error {
+	itimestamps := nodeStats.ExtractTimestamps()
 	timestamps := make([]string, 0)
-	// family name -> timestamp string -> formatted floating point value string
-	familySamples := make(map[string]map[string]string)
-	for _, sample := range nodeStats {
-		added := 0
-		timestamp := fmt.Sprintf("%.2f", sample.Timestamp.Sub(startTime).Seconds())
-
-		for name, mf := range sample.MetricFamilies {
-			if _, ok := familySamples[name]; !ok {
-				familySamples[name] = make(map[string]string)
-			}
-			// we only want counters and gauges right now
-			switch *mf.Type {
-			case pdto.MetricType_COUNTER:
-				familyNames[name] = *mf.Help
-				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Counter.Value))
-				added++
-
-			case pdto.MetricType_GAUGE:
-				familyNames[name] = *mf.Help
-				familySamples[name][timestamp] = fmt.Sprintf("%.4f", *(mf.Metric[0].Gauge.Value))
-				added++
-			}
-		}
-		if added > 0 {
-			timestamps = append(timestamps, timestamp)
-		}
+	for _, ts := range itimestamps {
+		timestamps = append(timestamps, fmt.Sprintf("%d", ts))
 	}
-	familyNamesSorted := make([]string, 0)
-	for name := range familyNames {
-		familyNamesSorted = append(familyNamesSorted, name)
+
+	familyIDsSorted := make([]string, 0)
+	for familyID := range nodeStats {
+		familyIDsSorted = append(familyIDsSorted, familyID)
 	}
-	sort.SliceStable(familyNamesSorted[:], func(i, j int) bool {
-		return strings.Compare(familyNamesSorted[i], familyNamesSorted[j]) < 0
+	sort.SliceStable(familyIDsSorted[:], func(i, j int) bool {
+		return strings.Compare(familyIDsSorted[i], familyIDsSorted[j]) < 0
 	})
 
 	// then we write the data to the given file as time series CSV data
@@ -554,14 +827,19 @@ func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, nodeStats 
 	}
 
 	// now we write the metric family samples
-	for _, name := range familyNamesSorted {
-		row := []string{name, familyNames[name]}
-		for _, ts := range timestamps {
-			if sample, ok := familySamples[name][ts]; ok {
-				row = append(row, sample)
+	for _, name := range familyIDsSorted {
+		nameParts := strings.Split(name, ":")
+		mfID := name
+		if len(nameParts) > 1 {
+			mfID = strings.Join(nameParts[1:], ":")
+		}
+		row := []string{name, familyDescriptions[mfID]}
+		for _, ts := range itimestamps {
+			if sample, ok := nodeStats[name][ts]; ok {
+				row = append(row, fmt.Sprintf("%.2f", sample))
 			} else {
 				// empty/missing value
-				row = append(row, "")
+				row = append(row, "0.0")
 			}
 		}
 		if err := cw.Write(row); err != nil {
@@ -578,14 +856,14 @@ func (ps *PrometheusStats) Dump(outputPath string) error {
 	if err := os.MkdirAll(outputPath, 0755); err != nil {
 		return err
 	}
-	for hostID, nodeStats := range ps.TargetNodeStats {
+	for hostID, nodeStats := range ps.TargetNodesStats {
 		outputFile := path.Join(outputPath, fmt.Sprintf("%s.csv", hostID))
 		f, err := os.Create(outputFile)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
-		if err := writeTimeSeriesTargetNodeStats(f, ps.StartTime, nodeStats); err != nil {
+		if err := writeTimeSeriesTargetNodeStats(f, ps.StartTime, ps.MetricFamilyDescriptions, nodeStats); err != nil {
 			return err
 		}
 	}

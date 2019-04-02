@@ -4,12 +4,27 @@ import (
 	"encoding"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"strings"
 	"time"
 
+	"github.com/tendermint/networks/internal/logging"
+
 	"github.com/BurntSushi/toml"
 )
+
+// DefaultHealthCheckInterval is the interval at which slave nodes are expected
+// to send a `LoadTestUnderway` message after starting their load testing.
+const DefaultHealthCheckInterval = 10 * time.Second
+
+// DefaultMaxMissedHealthChecks is the number of health checks that a slave can
+// miss before being considered as "failed" (i.e. one more missed health check
+// than `DefaultMaxMissedHealthChecks` will result in total load testing
+// failure).
+const DefaultMaxMissedHealthChecks = 2
+
+// DefaultMaxMissedHealthCheckPeriod is the time after which a slave is
+// considered to have failed if we don't hear from it during that period.
+const DefaultMaxMissedHealthCheckPeriod = ((DefaultMaxMissedHealthChecks + 1) * DefaultHealthCheckInterval)
 
 // Config is the central configuration structure for our load testing, from both
 // the master and slaves' perspectives.
@@ -30,16 +45,14 @@ type MasterConfig struct {
 
 // SlaveConfig provides configuration specific to the load testing slaves.
 type SlaveConfig struct {
-	Bind   string `toml:"bind"`   // The address to which to bind slave nodes (host:port).
-	Master string `toml:"master"` // The master's external address (host:port).
+	Bind           string            `toml:"bind"`            // The address to which to bind slave nodes (host:port).
+	Master         string            `toml:"master"`          // The master's external address (host:port).
+	UpdateInterval ParseableDuration `toml:"update_interval"` // The interval with which to send stats updates to the master.
 }
 
 // TestNetworkConfig encapsulates information about the network under test.
 type TestNetworkConfig struct {
-	RPCPort int `toml:"rpc_port"` // The default Tendermint RPC port.
-
 	EnablePrometheus       bool              `toml:"enable_prometheus"`        // Should we enable collections of Prometheus stats during testing?
-	PrometheusPort         int               `toml:"prometheus_port"`          // The default Prometheus port.
 	PrometheusPollInterval ParseableDuration `toml:"prometheus_poll_interval"` // How often should we poll the Prometheus endpoint?
 	PrometheusPollTimeout  ParseableDuration `toml:"prometheus_poll_timeout"`  // At what point do we consider a Prometheus polling operation a failure?
 
@@ -49,13 +62,11 @@ type TestNetworkConfig struct {
 // TestNetworkTargetConfig encapsulates the configuration for each node in the
 // Tendermint test network.
 type TestNetworkTargetConfig struct {
-	ID   string `toml:"id"`   // A short, descriptive identifier for this node.
-	Host string `toml:"host"` // The host address for this node.
+	ID             string `toml:"id"`                        // A short, descriptive identifier for this node.
+	URL            string `toml:"url"`                       // The RPC URL for this target node.
+	PrometheusURLs string `toml:"prometheus_urls,omitempty"` // The URL(s) (comma-separated) to poll for this target node, if Prometheus polling is enabled.
 
-	RPCPort        int    `toml:"rpc_port,omitempty"`        // Override for the default Tendermint RPC port for this node.
-	PrometheusHost string `toml:"prometheus_host,omitempty"` // Override the host address for the Prometheus endpoint (useful for using internal IPs).
-	PrometheusPort int    `toml:"prometheus_port,omitempty"` // Override for the default Prometheus port for this node.
-	Outages        string `toml:"outages,omitempty"`         // Specify an outage schedule to try to affect for this host.
+	Outages string `toml:"outages,omitempty"` // Specify an outage schedule to try to affect for this host.
 }
 
 // ClientConfig contains the configuration for clients being spawned on slaves.
@@ -75,8 +86,17 @@ type ClientConfig struct {
 // encoding.TextUnmarshaler.
 type ParseableDuration time.Duration
 
+// PrometheusEndpoint is what we parse from the `prometheus_urls` parameter in
+// the target network config for each node.
+type PrometheusEndpoint struct {
+	ID  string
+	URL string
+}
+
 // ParseableDuration implements encoding.TextUnmarshaler
 var _ encoding.TextUnmarshaler = (*ParseableDuration)(nil)
+
+var configLogger = logging.NewLogrusLogger("config")
 
 // ParseConfig will parse the configuration from the given string.
 func ParseConfig(data string) (*Config, error) {
@@ -155,6 +175,9 @@ func (s *SlaveConfig) Validate() error {
 	if len(s.Master) == 0 {
 		return NewError(ErrInvalidConfig, nil, "slave address for master must be explicitly specified")
 	}
+	if s.UpdateInterval == 0 {
+		return NewError(ErrInvalidConfig, nil, "slave update interval must be specified")
+	}
 	return nil
 }
 
@@ -163,12 +186,6 @@ func (s *SlaveConfig) Validate() error {
 //
 
 func (c *TestNetworkConfig) Validate() error {
-	if c.PrometheusPort < 1 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network prometheus port is invalid: %d", c.PrometheusPort))
-	}
-	if c.RPCPort < 1 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network RPC port is invalid: %d", c.RPCPort))
-	}
 	if len(c.Targets) == 0 {
 		return NewError(ErrInvalidConfig, nil, "test network must have at least one target (found 0)")
 	}
@@ -180,22 +197,12 @@ func (c *TestNetworkConfig) Validate() error {
 	return nil
 }
 
-// RandomTarget allows us to pick a Tendermint node at random from the test
-// network configuration.
-func (c *TestNetworkConfig) RandomTarget() *TestNetworkTargetConfig {
-	return &c.Targets[int(rand.Int31())%len(c.Targets)]
-}
-
 // GetTargetRPCURLs will return a simple, flattened list of URLs for all of the
 // target nodes' RPC addresses.
 func (c *TestNetworkConfig) GetTargetRPCURLs() []string {
 	urls := make([]string, 0)
 	for _, target := range c.Targets {
-		rpcPort := target.RPCPort
-		if rpcPort == 0 {
-			rpcPort = c.RPCPort
-		}
-		urls = append(urls, fmt.Sprintf("%s:%d", target.Host, rpcPort))
+		urls = append(urls, target.URL)
 	}
 	return urls
 }
@@ -208,22 +215,32 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 	if len(c.ID) == 0 {
 		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing an ID", i))
 	}
-	if len(c.Host) == 0 {
-		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing a host address", i))
+	if len(c.URL) == 0 {
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing its RPC URL", i))
+	}
+	if len(c.PrometheusURLs) == 0 {
+		return NewError(ErrInvalidConfig, nil, fmt.Sprintf("test network target %d is missing its Prometheus URL(s)", i))
 	}
 	return nil
 }
 
-func (c *TestNetworkTargetConfig) GetPrometheusURL(defaultPort int) string {
-	host := c.Host
-	if len(c.PrometheusHost) > 0 {
-		host = c.PrometheusHost
+// GetPrometheusEndpoints will extract the endpoint info for all of the validly
+// specified Prometheus endpoints. The right format for `prometheus_urls`
+// parameter resembles the following:
+// id1=http://server1,id2=http://server2
+func (c *TestNetworkTargetConfig) GetPrometheusEndpoints() []*PrometheusEndpoint {
+	idURLs := strings.Split(c.PrometheusURLs, ",")
+	endpoints := make([]*PrometheusEndpoint, 0)
+	for _, idURL := range idURLs {
+		parts := strings.Split(idURL, "=")
+		if len(parts) > 1 {
+			endpoints = append(endpoints, &PrometheusEndpoint{
+				ID:  parts[0],
+				URL: strings.Join(parts[1:], "="), // in case there's a "=" symbol somewhere in the URL
+			})
+		}
 	}
-	port := defaultPort
-	if c.PrometheusPort > 0 {
-		port = c.PrometheusPort
-	}
-	return fmt.Sprintf("http://%s:%d", host, port)
+	return endpoints
 }
 
 //
@@ -253,6 +270,9 @@ func (c *ClientConfig) Validate() error {
 	}
 	if c.RequestTimeout <= 0 {
 		return NewError(ErrInvalidConfig, nil, "client request timeout cannot be 0")
+	}
+	if c.MaxTestTime > 0 {
+		configLogger.Info("WARNING: max_text_time parameter is not yet implemented")
 	}
 	return nil
 }

@@ -25,6 +25,14 @@ message StartLoadTest {
     actor.PID Sender = 1;
 }
 
+// LoadTestUnderway is sent by slaves on a regular basis from the instant that
+// load testing starts. This acts as a notification to the master that the
+// slaves are, in fact, testing, as well as a form of health check/heartbeat to
+// ensure that the load testing completes effectively.
+message LoadTestUnderway {
+    actor.PID Sender = 1;
+}
+
 // MasterFailed is sent by the master node to the slaves if the master node
 // encounters an error from which it cannot recover.
 message MasterFailed {
@@ -41,8 +49,8 @@ message SlaveFailed {
 // SlaveUpdate is an intermediate update message from a slave to the master
 // during load testing.
 message SlaveUpdate {
-    actor.PID Sender = 1;
-    CombinedStats Stats = 2; // An intermediate update on statistics for the load test thus far.
+    actor.PID Sender           = 1;
+    int64     InteractionCount = 2; // The total number of completed interactions so far.
 }
 
 // SlaveFinished is sent by a slave when it successfully finishes its load
@@ -68,9 +76,9 @@ message Kill {
 // CombinedStats encapsulates the statistics we receive from a slave node
 // during/after testing for both interactions and requests.
 message CombinedStats {
-    int64                     TotalInteractionTime = 1; // Total time for all interactions, including random delays.
-    SummaryStats              Interactions         = 2; // Summarises the stats for interactions from this slave.
-    map<string, SummaryStats> Requests             = 3; // Summarises the stats per request category from this slave.
+    int64                     TotalTestTime = 1; // Total time for the overall load test (including delays, etc.)
+    SummaryStats              Interactions  = 2; // Summarises the stats for interactions from this slave.
+    map<string, SummaryStats> Requests      = 3; // Summarises the stats per request category from this slave.
 }
 
 // SummaryStats is a collection of statistics across a number of interactions or
@@ -79,18 +87,17 @@ message SummaryStats {
     int64  Count        = 1; // How many interactions/requests took place.
     int64  Errors       = 2; // The number of errors that occurred.
     int64  TotalTime    = 3; // The total time summed across all interactions/requests (nanoseconds).
-    int64  AbsTotalTime = 4; // The absolute total time, including wait periods, across all interactions/requests (nanoseconds).
-    int64  MinTime      = 5; // The minimum time for an interaction/request (nanoseconds).
-    int64  MaxTime      = 6; // The maximum time for an interaction/request (nanoseconds).
-    int64  TotalClients = 7; // For multi-client summaries, this is the number of clients responsible for the interactions/requests.
+    int64  MinTime      = 4; // The minimum time for an interaction/request (nanoseconds).
+    int64  MaxTime      = 5; // The maximum time for an interaction/request (nanoseconds).
+    int64  TotalClients = 6; // For multi-client summaries, this is the number of clients responsible for the interactions/requests.
 
     // For keeping track of the different kinds of errors that occurred, as well
     // as the number of times each error occurred.
-    map<string, int64> ErrorsByType = 8;
+    map<string, int64> ErrorsByType = 7;
 
     // Allows us to plot a summary picture of the range of response times during
     // our interactions/requests.
-    ResponseTimeHistogram ResponseTimes = 9;
+    ResponseTimeHistogram ResponseTimes = 8;
 }
 
 // ResponseTimeHistogram allows us to plot the range of different

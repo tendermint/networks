@@ -41,10 +41,14 @@ tools: build-tm-outage-sim-server build-tm-load-test
 
 tools-linux: build-tm-outage-sim-server-linux build-tm-load-test-linux
 
-protos:
+protos: $(GOPATH)/bin/protoc-gen-gogoslick
 	protoc --gogoslick_out=$(SRC_DIR)/pkg/loadtest/messages/ \
-		--proto_path=$(GOPATH)/src/github.com/tendermint/networks/pkg/loadtest/messages::$(GOPATH)/src/github.com/tendermint/networks/vendor/ \
+		-I$(GOPATH)/src/github.com/tendermint/networks/pkg/loadtest/messages/ \
+		-I$(GOPATH)/src/github.com/tendermint/networks/vendor/ \
 		loadtest.proto
+
+$(GOPATH)/bin/protoc-gen-gogoslick:
+	go get -u github.com/gogo/protobuf/...
 
 lint: get-deps get-linter
 	golangci-lint run ./...

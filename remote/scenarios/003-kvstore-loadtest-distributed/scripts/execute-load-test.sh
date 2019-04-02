@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # convert the Python "True" or "False" to "true" or "false"
