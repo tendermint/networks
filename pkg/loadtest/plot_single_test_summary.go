@@ -104,53 +104,80 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 
 	<section class="section">
 	<div class="container">
-			<h2 class="title is-2">Charts</h2>
-			<h3 class="subtitle is-3">Interaction Response Times</h3>
-			<div class="columns">
-				<div class="column is-one-quarter">
-					<table class="table is-striped is-hoverable">
-						<thead>
-							<tr>
-								<th>Parameter</th>
-								<th>Value</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>Total clients</td>
-								<td>{{.InteractionsTotalClients}}</td>
-							</tr>
-							<tr>
-								<td>Interactions/sec overall (absolute)</td>
-								<td>{{.InteractionsPerSec}}</td>
-							</tr>
-							<tr>
-								<td>Interaction count</td>
-								<td>{{.InteractionsCount}}</td>
-							</tr>
-							<tr>
-								<td>Interaction error count</td>
-								<td>{{.InteractionsErrors}}</td>
-							</tr>
-							<tr>
-								<td>Interaction error rate</td>
-								<td>{{.InteractionsErrorRate}}</td>
-							</tr>
-							<tr>
-								<td>Interaction min time</td>
-								<td>{{.InteractionsMinTime}}</td>
-							</tr>
-							<tr>
-								<td>Interaction max time</td>
-								<td>{{.InteractionsMaxTime}}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-				<div class="column">
-					<div id="interaction-rt-chart"></div>
-				</div>
+		<h2 class="title is-2">Charts</h2>
+		<h3 class="subtitle is-3">Interaction Response Times</h3>
+		<div class="columns">
+			<div class="column is-one-quarter">
+				<table class="table is-striped is-hoverable">
+					<thead>
+						<tr>
+							<th>Parameter</th>
+							<th>Value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Total clients</td>
+							<td>{{.InteractionsTotalClients}}</td>
+						</tr>
+						<tr>
+							<td>Interactions/sec overall (absolute)</td>
+							<td>{{.InteractionsPerSec}}</td>
+						</tr>
+						<tr>
+							<td>Interaction count</td>
+							<td>{{.InteractionsCount}}</td>
+						</tr>
+						<tr>
+							<td>Interaction error count</td>
+							<td>{{.InteractionsErrors}}</td>
+						</tr>
+						<tr>
+							<td>Interaction error rate</td>
+							<td>{{.InteractionsErrorRate}}</td>
+						</tr>
+						<tr>
+							<td>Interaction min time</td>
+							<td>{{.InteractionsMinTime}}</td>
+						</tr>
+						<tr>
+							<td>Interaction max time</td>
+							<td>{{.InteractionsMaxTime}}</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
+			<div class="column">
+				<div id="interaction-rt-chart"></div>
+			</div>
+		</div>
+
+		{{if $.ErrorCounts}}
+		<div class="columns">
+			<div class="column">
+				<h5 class="subtitle is-5">Top Interaction Errors</code></h5>
+				<table class="table is-striped is-hoverable is-fullwidth">
+					<thead>
+						<tr>
+							<th>No.</th>
+							<th>Error</th>
+							<th>Count</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{range $i, $errCount := $.ErrorCounts}}
+						<tr>
+							<td>{{$i}}</td>
+							<td>{{$errCount.Description}}</td>
+							<td>{{$errCount.Count}}</td>
+						</tr>
+						{{end}}
+					</tbody>
+				</table>
+				<h5 class="subtitle is-5">&nbsp;</h5>
+			</div>
+		</div>
+		{{end}}
 	</div>
 	</section>
 
@@ -162,7 +189,7 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			<h4 class="subtitle is-4"><code>{{$req.Name}}</code></h4>
 			<div class="columns">
 				<div class="column is-one-quarter">
-					<table class="table is-striped is-hoverable">
+					<table class="table is-striped is-hoverable is-fullwidth">
 						<thead>
 							<tr>
 								<th>Parameter</th>
@@ -201,6 +228,33 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 					<div id="{{$req.Name}}-rt-chart"></div>
 				</div>
 			</div>
+
+			{{if $req.ErrorCounts}}
+			<div class="columns">
+				<div class="column">
+					<h5 class="subtitle is-5">Top Errors for <code>{{$req.Name}}</code></h5>
+					<table class="table is-striped is-hoverable is-fullwidth">
+						<thead>
+							<tr>
+								<th>No.</th>
+								<th>Error</th>
+								<th>Count</th>
+							</tr>
+						</thead>
+						<tbody>
+							{{range $j, $errCount := $req.ErrorCounts}}
+							<tr>
+								<td>{{$j}}</td>
+								<td>{{$errCount.Description}}</td>
+								<td>{{$errCount.Count}}</td>
+							</tr>
+							{{end}}
+						</tbody>
+					</table>
+					<h5 class="subtitle is-5">&nbsp;</h5>
+				</div>
+			</div>
+			{{end}}
 			{{end}}
 
 		</div>
@@ -211,8 +265,10 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 			<h3 class="subtitle is-3">Node Charts</h3>
 
 			{{range $i, $nodeChart := $.NodeCharts}}
-			<h4 class="subtitle is-4">{{$nodeChart.Title}}</h4>
 			<div id="{{$nodeChart.ID}}-chart"></div>
+			<div class="container">&nbsp;</div>
+			<div class="container">&nbsp;</div>
+			<div class="container">&nbsp;</div>
 			{{end}}
 		</div>
 	</section>
@@ -259,9 +315,6 @@ const SingleTestSummaryPlot = `<!DOCTYPE html>
 				title: ytitle,
 				xaxis: {
 					title: xtitle
-				},
-				yaxis: {
-					title: ytitle
 				}
 			};
 
@@ -339,6 +392,9 @@ type SingleTestSummaryContext struct {
 	InteractionsResponseTimesBins   template.JS
 	InteractionsResponseTimesCounts template.JS
 
+	// Top errors encountered by interactions
+	ErrorCounts []SingleTestSummaryErrorCount
+
 	// Request-related parameters
 	Requests []SingleTestSummaryRequestParams
 
@@ -360,6 +416,16 @@ type SingleTestSummaryRequestParams struct {
 	// For the request response times histogram
 	ResponseTimesBins   template.JS
 	ResponseTimesCounts template.JS
+
+	// Error counts
+	ErrorCounts []SingleTestSummaryErrorCount
+}
+
+// SingleTestSummaryErrorCount helps us represent one of the top errors
+// encountered by an interaction or request.
+type SingleTestSummaryErrorCount struct {
+	Description template.HTML
+	Count       template.HTML
 }
 
 // SingleTestNodeChart encapsulates parameters for a specific metric family.
@@ -407,6 +473,8 @@ func NewSingleTestSummaryContext(cfg *Config, stats *messages.CombinedStats, nod
 		InteractionsResponseTimesBins:   template.JS(ibins),
 		InteractionsResponseTimesCounts: template.JS(icounts),
 
+		ErrorCounts: buildErrorCounts(stats.Interactions.ErrorsByType),
+
 		Requests: buildRequestsCtx(stats.Requests, stats.TotalTestTime),
 
 		NodeCharts: buildNodeCharts(nodesData, "				"),
@@ -437,6 +505,7 @@ func buildRequestsCtx(stats map[string]*messages.SummaryStats, totalTestTime int
 			MaxTime:             template.HTML(fmt.Sprintf("%.1fms", float64(stats[reqName].MaxTime)/float64(time.Millisecond))),
 			ResponseTimesBins:   template.JS(rbins),
 			ResponseTimesCounts: template.JS(rcounts),
+			ErrorCounts:         buildErrorCounts(stats[reqName].ErrorsByType),
 		}
 		result = append(result, params)
 	}
@@ -475,9 +544,18 @@ func buildNodeCharts(nodesData map[string]map[string]MetricFamilyData, indent st
 	}
 
 	for _, mf := range metricFamilies {
+		mfParts := strings.Split(mf, ":")
+		prometheusID := ""
+		titleSuffix := ""
+		mfID := mf
+		if len(mfParts) > 1 {
+			mfID = strings.Join(mfParts[1:], ":")
+			prometheusID = mfParts[0]
+			titleSuffix = fmt.Sprintf(" [%s]", prometheusID)
+		}
 		charts = append(charts, SingleTestNodeChart{
-			ID:        template.JS(mf),
-			Title:     template.JS(metricFamilyTitles[mf]),
+			ID:        template.JS(prometheusID + "__" + mfID),
+			Title:     template.JS(metricFamilyTitles[mf] + titleSuffix),
 			Hostnames: template.JS(indent + strings.Join(hostnamesQuoted, ", ")),
 			NodesData: template.JS(flattenNodesChartData(nodesData[mf], hostnames, indent)),
 		})
@@ -527,6 +605,24 @@ func flattenNodesChartData(nodesData map[string]MetricFamilyData, hostnames []st
 	}
 
 	return builder.String()
+}
+
+func buildErrorCounts(errorsByType map[string]int64) []SingleTestSummaryErrorCount {
+	counts := make([]SingleTestSummaryErrorCount, 0)
+	sortedErrors := make([]string, 0)
+	for errType := range errorsByType {
+		sortedErrors = append(sortedErrors, errType)
+	}
+	sort.SliceStable(sortedErrors[:], func(i, j int) bool {
+		return errorsByType[sortedErrors[i]] > errorsByType[sortedErrors[j]]
+	})
+	for _, errType := range sortedErrors {
+		counts = append(counts, SingleTestSummaryErrorCount{
+			Description: template.HTML(errType),
+			Count:       template.HTML(fmt.Sprintf("%d", errorsByType[errType])),
+		})
+	}
+	return counts
 }
 
 // RenderSingleTestSummaryPlot is a convenience method to render the single test

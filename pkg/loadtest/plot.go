@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 )
 
 var desiredPrometheusMetrics = map[string]interface{}{
@@ -121,8 +122,13 @@ func readPrometheusStats(cfg *Config, inputDir string) (map[string]map[string]Me
 				if err != nil {
 					break
 				}
+				mfIDParts := strings.Split(row[0], ":")
+				mfID := mfIDParts[0]
+				if len(mfIDParts) > 1 {
+					mfID = strings.Join(mfIDParts[1:], ":")
+				}
 
-				if _, mfDesired := desiredPrometheusMetrics[row[0]]; mfDesired {
+				if _, mfDesired := desiredPrometheusMetrics[mfID]; mfDesired {
 					if len(row)-2 < len(timestamps) {
 						return fmt.Errorf("Not enough data in host stats file (expected %d entries, but got %d), line %d: %s", len(timestamps), len(row)-2, lineNo, hostStatsFile)
 					}

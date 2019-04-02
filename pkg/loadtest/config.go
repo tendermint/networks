@@ -86,6 +86,13 @@ type ClientConfig struct {
 // encoding.TextUnmarshaler.
 type ParseableDuration time.Duration
 
+// PrometheusEndpoint is what we parse from the `prometheus_urls` parameter in
+// the target network config for each node.
+type PrometheusEndpoint struct {
+	ID  string
+	URL string
+}
+
 // ParseableDuration implements encoding.TextUnmarshaler
 var _ encoding.TextUnmarshaler = (*ParseableDuration)(nil)
 
@@ -217,8 +224,23 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 	return nil
 }
 
-func (c *TestNetworkTargetConfig) GetPrometheusURLs() []string {
-	return strings.Split(c.PrometheusURLs, ",")
+// GetPrometheusEndpoints will extract the endpoint info for all of the validly
+// specified Prometheus endpoints. The right format for `prometheus_urls`
+// parameter resembles the following:
+// id1=http://server1,id2=http://server2
+func (c *TestNetworkTargetConfig) GetPrometheusEndpoints() []*PrometheusEndpoint {
+	idURLs := strings.Split(c.PrometheusURLs, ",")
+	endpoints := make([]*PrometheusEndpoint, 0)
+	for _, idURL := range idURLs {
+		parts := strings.Split(idURL, "=")
+		if len(parts) > 1 {
+			endpoints = append(endpoints, &PrometheusEndpoint{
+				ID:  parts[0],
+				URL: strings.Join(parts[1:], "="), // in case there's a "=" symbol somewhere in the URL
+			})
+		}
+	}
+	return endpoints
 }
 
 //

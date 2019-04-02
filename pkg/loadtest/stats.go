@@ -596,10 +596,10 @@ func ReadCombinedStatsFromFile(csvFile string) (*messages.CombinedStats, error) 
 // GetNodePrometheusStats will perform a blocking GET request to the given URL
 // to fetch the text-formatted Prometheus metrics for a particular node, parse
 // those metrics, and then either return the parsed metrics or an error.
-func GetNodePrometheusStats(c *http.Client, url string, ts int64) (NodePrometheusStats, map[string]string, error) {
+func GetNodePrometheusStats(c *http.Client, endpoint *PrometheusEndpoint, ts int64) (NodePrometheusStats, map[string]string, error) {
 	stats := make(NodePrometheusStats)
 	descriptions := make(map[string]string)
-	resp, err := c.Get(url)
+	resp, err := c.Get(endpoint.URL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -615,14 +615,15 @@ func GetNodePrometheusStats(c *http.Client, url string, ts int64) (NodePrometheu
 	}
 
 	for mfID, mf := range metricFamilies {
-		stats[mfID] = make(map[int64]float64)
+		fullID := fmt.Sprintf("%s:%s", endpoint.ID, mfID)
+		stats[fullID] = make(map[int64]float64)
 		switch mf.GetType() {
 		case pdto.MetricType_COUNTER:
-			stats[mfID][ts] = mf.GetMetric()[0].GetCounter().GetValue()
+			stats[fullID][ts] = mf.GetMetric()[0].GetCounter().GetValue()
 			descriptions[mfID] = mf.GetHelp()
 
 		case pdto.MetricType_GAUGE:
-			stats[mfID][ts] = mf.GetMetric()[0].GetGauge().GetValue()
+			stats[fullID][ts] = mf.GetMetric()[0].GetGauge().GetValue()
 			descriptions[mfID] = mf.GetHelp()
 		}
 	}
@@ -675,13 +676,13 @@ type nodePrometheusStats struct {
 	stats        NodePrometheusStats
 }
 
-func collectPrometheusStats(c *http.Client, hostID string, nodeURLs []string, ts time.Duration, statsc chan nodePrometheusStats, logger logging.Logger) {
+func collectPrometheusStats(c *http.Client, hostID string, endpoints []*PrometheusEndpoint, ts time.Duration, statsc chan nodePrometheusStats, logger logging.Logger) {
 	resultStats := make(NodePrometheusStats)
 	descriptions := make(map[string]string)
 	timestamp := int64(math.Round(ts.Seconds()))
 
-	for _, nodeURL := range nodeURLs {
-		stats, desc, err := GetNodePrometheusStats(c, nodeURL, timestamp)
+	for _, endpoint := range endpoints {
+		stats, desc, err := GetNodePrometheusStats(c, endpoint, timestamp)
 		if err == nil {
 			resultStats.Merge(stats)
 			for mfID, mfDesc := range desc {
@@ -739,15 +740,15 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 		collectorShutdownc := make(chan bool, 1)
 		collectorsShutdownc = append(collectorsShutdownc, collectorShutdownc)
 		wg.Add(1)
-		go func(client *http.Client, hostID string, nodeURLs []string, csc chan bool) {
-			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURLs", nodeURLs)
+		go func(client *http.Client, hostID string, endpoints []*PrometheusEndpoint, csc chan bool) {
+			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURLs", endpoints)
 			// fire off an initial request for stats (prior to first tick)
-			collectPrometheusStats(client, hostID, nodeURLs, time.Since(ps.StartTime), statsc, logger)
+			collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
 		collectorLoop:
 			for {
 				select {
 				case <-ticker.C:
-					collectPrometheusStats(client, hostID, nodeURLs, time.Since(ps.StartTime), statsc, logger)
+					collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
 
 				case <-csc:
 					logger.Debug("Shutting down collector goroutine", "hostID", hostID)
@@ -755,7 +756,7 @@ func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool
 				}
 			}
 			wg.Done()
-		}(c, node.ID, node.GetPrometheusURLs(), collectorShutdownc)
+		}(c, node.ID, node.GetPrometheusEndpoints(), collectorShutdownc)
 	}
 	logger.Debug("Prometheus collectors started")
 
@@ -786,7 +787,7 @@ collectorsLoop:
 	// do one final collection from each node
 	for i, node := range cfg.TestNetwork.Targets {
 		finalStatsc := make(chan nodePrometheusStats, 1)
-		go collectPrometheusStats(clients[i], node.ID, node.GetPrometheusURLs(), time.Since(ps.StartTime), finalStatsc, logger)
+		go collectPrometheusStats(clients[i], node.ID, node.GetPrometheusEndpoints(), time.Since(ps.StartTime), finalStatsc, logger)
 		select {
 		case nodeStats := <-finalStatsc:
 			ps.Merge(nodeStats)
@@ -827,7 +828,12 @@ func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, familyDesc
 
 	// now we write the metric family samples
 	for _, name := range familyIDsSorted {
-		row := []string{name, familyDescriptions[name]}
+		nameParts := strings.Split(name, ":")
+		mfID := name
+		if len(nameParts) > 1 {
+			mfID = strings.Join(nameParts[1:], ":")
+		}
+		row := []string{name, familyDescriptions[mfID]}
 		for _, ts := range itimestamps {
 			if sample, ok := nodeStats[name][ts]; ok {
 				row = append(row, fmt.Sprintf("%.2f", sample))
