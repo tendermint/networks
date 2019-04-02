@@ -52,6 +52,11 @@ type PrometheusStats struct {
 	StartTime                time.Time                      // When was the load test started?
 	MetricFamilyDescriptions map[string]string              // Mapping of metric family ID -> description
 	TargetNodesStats         map[string]NodePrometheusStats // Target node stats organized by hostname.
+
+	logger     logging.Logger
+	collectors []*prometheusCollector   // The collectors that're responsible for fetching the Prometheus stats from each target node.
+	statsc     chan nodePrometheusStats // The channel through which the primary Prometheus goroutine receives stats from collectors
+	wg         *sync.WaitGroup
 }
 
 // NodePrometheusStats represents a single test network node's stats from its
@@ -589,6 +594,53 @@ func ReadCombinedStatsFromFile(csvFile string) (*messages.CombinedStats, error) 
 	return ReadCombinedStats(f)
 }
 
+// sortedErrorsByType returns a slice containing the keys of the given map in
+// order from highest value to lowest.
+func sortedErrorsByType(errorsByType map[string]int64) []string {
+	types := make([]string, 0)
+	for errType := range errorsByType {
+		types = append(types, errType)
+	}
+	sort.SliceStable(types[:], func(i, j int) bool {
+		return errorsByType[types[i]] > errorsByType[types[j]]
+	})
+	return types
+}
+
+func SummarizeSummaryStats(stats *messages.SummaryStats) *messages.SummaryStats {
+	topErrors := make(map[string]int64)
+	errorsByType := sortedErrorsByType(stats.ErrorsByType)
+	for i := 0; i < 10 && i < len(errorsByType); i++ {
+		topErrors[errorsByType[i]] = stats.ErrorsByType[errorsByType[i]]
+	}
+	return &messages.SummaryStats{
+		Count:         stats.Count,
+		Errors:        stats.Errors,
+		TotalTime:     stats.TotalTime,
+		MinTime:       stats.MinTime,
+		MaxTime:       stats.MaxTime,
+		TotalClients:  stats.TotalClients,
+		ErrorsByType:  topErrors,
+		ResponseTimes: &(*stats.ResponseTimes),
+	}
+}
+
+// SummarizeCombinedStats will summarize the error reporting such that only a
+// maximum of 10 kinds of errors are returned. This is to help avoid hitting the
+// GRPC message size limits when sending data back to the master. It creates a
+// new `CombinedStats` object without modifying the original one.
+func SummarizeCombinedStats(stats *messages.CombinedStats) *messages.CombinedStats {
+	summarizedRequests := make(map[string]*messages.SummaryStats)
+	for reqName, reqStats := range stats.Requests {
+		summarizedRequests[reqName] = SummarizeSummaryStats(reqStats)
+	}
+	return &messages.CombinedStats{
+		TotalTestTime: stats.TotalTestTime,
+		Interactions:  SummarizeSummaryStats(stats.Interactions),
+		Requests:      summarizedRequests,
+	}
+}
+
 //
 // NodePrometheusStats
 //
@@ -676,35 +728,88 @@ type nodePrometheusStats struct {
 	stats        NodePrometheusStats
 }
 
-func collectPrometheusStats(c *http.Client, hostID string, endpoints []*PrometheusEndpoint, ts time.Duration, statsc chan nodePrometheusStats, logger logging.Logger) {
+type prometheusCollector struct {
+	logger    logging.Logger
+	startTime time.Time
+	cfg       TestNetworkTargetConfig
+	endpoints []*PrometheusEndpoint // The endpoints for which this collector is responsible
+	client    *http.Client
+	ticker    *time.Ticker
+	shutdownc chan bool
+	wg        *sync.WaitGroup
+}
+
+func spawnCollector(cfg *Config, nodeCfg TestNetworkTargetConfig, startTime time.Time, statsc chan nodePrometheusStats, wg *sync.WaitGroup, logger logging.Logger) *prometheusCollector {
+	col := &prometheusCollector{
+		logger:    logger,
+		startTime: startTime,
+		cfg:       nodeCfg,
+		endpoints: nodeCfg.GetPrometheusEndpoints(),
+		client: &http.Client{
+			Timeout: time.Duration(cfg.TestNetwork.PrometheusPollTimeout),
+		},
+		ticker:    time.NewTicker(time.Duration(cfg.TestNetwork.PrometheusPollInterval)),
+		shutdownc: make(chan bool, 1),
+		wg:        wg,
+	}
+	wg.Add(1)
+	// spawn the goroutine for the collector
+	go col.collectorLoop(statsc)
+	return col
+}
+
+func (col *prometheusCollector) collectorLoop(statsc chan nodePrometheusStats) {
+	col.logger.Debug("Goroutine created for Prometheus collector", "hostID", col.cfg.ID, "nodeURLs", col.endpoints)
+	// fire off an initial request for stats (prior to first tick)
+	col.collect(statsc)
+loop:
+	for {
+		select {
+		case <-col.ticker.C:
+			col.collect(statsc)
+
+		case <-col.shutdownc:
+			col.logger.Debug("Shutting down collector goroutine", "hostID", col.cfg.ID)
+			break loop
+		}
+	}
+	col.wg.Done()
+}
+
+// collect will run through all of the Prometheus endpoints and actually fetch
+// the stats from that endpoint. Stats are then collected and passed through to
+// the given `statsc` channel.
+func (col *prometheusCollector) collect(statsc chan nodePrometheusStats) {
 	resultStats := make(NodePrometheusStats)
 	descriptions := make(map[string]string)
+	ts := time.Since(col.startTime)
 	timestamp := int64(math.Round(ts.Seconds()))
 
-	for _, endpoint := range endpoints {
-		stats, desc, err := GetNodePrometheusStats(c, endpoint, timestamp)
+	for _, endpoint := range col.endpoints {
+		stats, desc, err := GetNodePrometheusStats(col.client, endpoint, timestamp)
 		if err == nil {
 			resultStats.Merge(stats)
 			for mfID, mfDesc := range desc {
 				descriptions[mfID] = mfDesc
 			}
 		} else {
-			logger.Error("Failed to retrieve Prometheus stats", "hostID", hostID, "err", err)
+			col.logger.Error("Failed to retrieve Prometheus stats", "hostID", col.cfg.ID, "err", err)
 		}
 	}
 
 	statsc <- nodePrometheusStats{
-		hostID:       hostID,
+		hostID:       col.cfg.ID,
 		descriptions: descriptions,
 		stats:        resultStats,
 	}
 }
 
 // NewPrometheusStats creates a new, ready-to-use PrometheusStats object.
-func NewPrometheusStats() *PrometheusStats {
+func NewPrometheusStats(logger logging.Logger) *PrometheusStats {
 	return &PrometheusStats{
 		MetricFamilyDescriptions: make(map[string]string),
 		TargetNodesStats:         make(map[string]NodePrometheusStats),
+		logger:                   logger,
 	}
 }
 
@@ -723,82 +828,72 @@ func (ps *PrometheusStats) Merge(s nodePrometheusStats) {
 // RunCollectors will kick off one goroutine per Tendermint node from which
 // we're collecting Prometheus stats.
 func (ps *PrometheusStats) RunCollectors(cfg *Config, shutdownc, donec chan bool, logger logging.Logger) {
-	clients := make([]*http.Client, 0)
-	statsc := make(chan nodePrometheusStats, len(cfg.TestNetwork.Targets))
-	tickers := make([]*time.Ticker, 0)
-	collectorsShutdownc := make([]chan bool, 0)
+	// provide enough room in the channel for all of our collectors to send
+	// updates at once
+	ps.statsc = make(chan nodePrometheusStats, len(cfg.TestNetwork.Targets))
+	ps.wg = &sync.WaitGroup{}
+	ps.collectors = make([]*prometheusCollector, 0)
+
 	logger.Debug("Starting up Prometheus collectors", "count", len(cfg.TestNetwork.Targets))
 	ps.StartTime = time.Now()
-	wg := &sync.WaitGroup{}
 	for _, node := range cfg.TestNetwork.Targets {
-		c := &http.Client{
-			Timeout: time.Duration(cfg.TestNetwork.PrometheusPollTimeout),
-		}
-		clients = append(clients, c)
-		ticker := time.NewTicker(time.Duration(cfg.TestNetwork.PrometheusPollInterval))
-		tickers = append(tickers, ticker)
-		collectorShutdownc := make(chan bool, 1)
-		collectorsShutdownc = append(collectorsShutdownc, collectorShutdownc)
-		wg.Add(1)
-		go func(client *http.Client, hostID string, endpoints []*PrometheusEndpoint, csc chan bool) {
-			logger.Debug("Goroutine created for Prometheus collector", "hostID", hostID, "nodeURLs", endpoints)
-			// fire off an initial request for stats (prior to first tick)
-			collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
-		collectorLoop:
-			for {
-				select {
-				case <-ticker.C:
-					collectPrometheusStats(client, hostID, endpoints, time.Since(ps.StartTime), statsc, logger)
-
-				case <-csc:
-					logger.Debug("Shutting down collector goroutine", "hostID", hostID)
-					break collectorLoop
-				}
-			}
-			wg.Done()
-		}(c, node.ID, node.GetPrometheusEndpoints(), collectorShutdownc)
+		ps.collectors = append(ps.collectors, spawnCollector(
+			cfg,
+			node,
+			ps.StartTime,
+			ps.statsc,
+			ps.wg,
+			logger,
+		))
 	}
 	logger.Debug("Prometheus collectors started")
+	// wait for all the collectors to finish their collection
+	ps.waitForCollectors(shutdownc)
 
-collectorsLoop:
+	// collect one last batch of stats once the network's settled a bit
+	ps.collectFinalStats(time.Duration(cfg.TestNetwork.PrometheusPollTimeout))
+
+	logger.Debug("Prometheus collector loop shut down")
+	donec <- true
+}
+
+func (ps *PrometheusStats) waitForCollectors(shutdownc chan bool) {
+loop:
 	for {
 		select {
-		case nodeStats := <-statsc:
+		case nodeStats := <-ps.statsc:
 			ps.Merge(nodeStats)
 
 		case <-shutdownc:
-			logger.Debug("Shutdown signal received by Prometheus collector loop")
-			break collectorsLoop
+			ps.logger.Debug("Shutdown signal received by Prometheus collector loop")
+			break loop
 		}
 	}
-	for _, ticker := range tickers {
-		ticker.Stop()
-	}
-	for _, csc := range collectorsShutdownc {
-		csc <- true
+	for _, col := range ps.collectors {
+		col.ticker.Stop()
+		col.shutdownc <- true
 	}
 	// wait for all of the collector loops to shut down
-	wg.Wait()
+	ps.wg.Wait()
+}
 
-	logger.Info("Waiting 10 seconds for network to settle post-test...")
+func (ps *PrometheusStats) collectFinalStats(timeout time.Duration) {
+	ps.logger.Info("Waiting 10 seconds for network to settle post-test...")
 	time.Sleep(10 * time.Second)
 
-	logger.Debug("Doing one final Prometheus stats collection from each node")
+	ps.logger.Debug("Doing one final Prometheus stats collection from each node")
 	// do one final collection from each node
-	for i, node := range cfg.TestNetwork.Targets {
+	for _, col := range ps.collectors {
 		finalStatsc := make(chan nodePrometheusStats, 1)
-		go collectPrometheusStats(clients[i], node.ID, node.GetPrometheusEndpoints(), time.Since(ps.StartTime), finalStatsc, logger)
+		col.collect(finalStatsc)
 		select {
 		case nodeStats := <-finalStatsc:
 			ps.Merge(nodeStats)
 
-		case <-time.After(time.Duration(cfg.TestNetwork.PrometheusPollTimeout)):
-			logger.Error("Timed out waiting for final Prometheus polling operation to complete", "hostID", node.ID)
+		case <-time.After(timeout):
+			ps.logger.Error("Timed out waiting for final Prometheus polling operation to complete", "hostID", col.cfg.ID)
 		}
 	}
-
-	logger.Debug("Prometheus collector loop shut down")
-	donec <- true
 }
 
 func writeTimeSeriesTargetNodeStats(w io.Writer, startTime time.Time, familyDescriptions map[string]string, nodeStats NodePrometheusStats) error {
