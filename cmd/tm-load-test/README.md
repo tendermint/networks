@@ -42,41 +42,44 @@ bind = "0.0.0.0:"
 # we still need an external address through which to access the master).
 master = "127.0.0.1:35000"
 
-[test-network]
+# The interval at which stats updates will be sent to the master. Note that this
+# is approximate - due to the nature of the client interaction loop. Updates are
+# sent back to the master in a "best effort" fashion.
+update_interval = "10s"
+
+[test_network]
 # Do we want to collect Prometheus stats during the load testing too?
 enable_prometheus = true
-
-# Defaults for RPC and Prometheus ports on the targets (these can be overridden
-# in each target's section below).
-rpc_port = 26657
-prometheus_port = 26660
-
 # How often to poll the Prometheus endpoint for each host
 prometheus_poll_interval = "10s"
 # At what point do we consider a Prometheus polling operation a failure?
 prometheus_poll_timeout = "1s"
 
-    [[test-network.targets]]
-    # A short, descriptive identifier for this host
-    id = "tm1"
-    host = "192.168.2.1"
+    [[test_network.targets]]
+    id = "host1"
+    url = "http://192.168.2.1:26657"
 
-    # To override the default RPC/Prometheus ports
-    #rpc_port = 26657
-    #prometheus_port = 26660
+    # A comma-separated list of Prometheus endpoints to poll on a regular basis.
+    # The format for a Prometheus endpoint is of the form:
+    # "endpointid1=http://host1,endpointid2=http://host2", where the output
+    # statistics will include the endpoint ID in the metric names to
+    # differentiate their sources.
+    prometheus_urls = "tendermint=http://192.168.2.1:26660"
 
     # If tm-outage-sim-server is running on this host, tm-load-test will
     # attempt to bring it down after 5 minutes, and then back up after 8
     # minutes.
     #outages = "5m:down,8m:up"
 
-    [[test-network.targets]]
-    id = "tm2"
-    host = "192.168.2.2"
+    [[test_network.targets]]
+    id = "host2"
+    url = "http://192.168.2.2:26657"
+    prometheus_urls = "tendermint=http://192.168.2.2:26660"
 
-    [[test-network.targets]]
-    id = "tm3"
-    host = "192.168.2.3"
+    [[test_network.targets]]
+    id = "host3"
+    url = "http://192.168.2.3:26657"
+    prometheus_urls = "tendermint=http://192.168.2.3:26660"
 
 [clients]
 # What type of client to spawn. The `tmrpc` type uses the Tendermint client for
@@ -135,6 +138,14 @@ tm-load-test -c load-test.toml -slave
 tm-load-test -c load-test.toml -slave
 ```
 
-## Statistics
-Overall summary statistics will be written to a file called `summary.csv` in the
-`results_dir` output folder.
+## Results
+The following results will be output after the execution of the load test, and
+will be written into the `master.results_dir` directory.
+
+* `summary.csv` - Will contain a summary of interaction- and request-related
+  statistics from the load test.
+* `host1.csv`, `host2.csv`, ... - One CSV file for each host specified in the
+  `test_network.targets` array. Each CSV file contains all of the collected
+  Prometheus statistics from each Prometheus endpoint for the relevant host for
+  the duration of the load test.
+
