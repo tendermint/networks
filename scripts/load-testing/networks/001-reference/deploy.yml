@@ -1,5 +1,5 @@
 ---
-- hosts: tik
+- hosts: tendermint
   become: yes
   vars:
     always_deploy_svc: no
