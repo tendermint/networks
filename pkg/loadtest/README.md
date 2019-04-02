@@ -29,6 +29,7 @@ create your own equivalent of the `tm-load-test` command, but register your
 client during startup for use from the configuration file.
 
 ```go
+// my-tm-load-test.go
 package main
 
 import (
@@ -47,3 +48,13 @@ func main() {
     loadtest.Run()
 }
 ```
+
+## Building and Running Your Load Test Application
+Then, produce your own executable for your load testing application:
+
+```bash
+go build -o build/my-tm-load-test ./path/to/my-tm-load-test.go
+```
+
+It can then be executed with the same parameters and configuration file as the
+standard [`tm-load-test`](../../cmd/tm-load-test/README.md) application.

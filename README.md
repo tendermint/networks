@@ -34,3 +34,8 @@ To run the linter and the tests:
 > make lint
 > make test
 ```
+
+## Scripts
+There are scripts provided in this repository for:
+
+* [load testing](./scripts/load-testing/README.md) of Tendermint networks

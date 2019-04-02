@@ -6,10 +6,16 @@ FETCH_RESULTS_ONLY?=false
 TMLOADTEST_PATH?=$(GOPATH)/src/github.com/tendermint/networks
 TMLOADTEST_BINARY?=$(TMLOADTEST_PATH)/build/tm-load-test
 MASTER_NODE?=tok0
+MASTER_INTERNAL_IP?=172.31.6.229
+EXPECT_SLAVES?=4
+TEST_NETWORK_TARGETS?=[{ id: "tik0", url: "http://tik0.sredev.co:26657", prometheus_urls: "tendermint=http://172.31.7.28:26660,node=http://172.31.7.28:9100/metrics" }, \
+{ id: "tik1", url: "http://tik1.sredev.co:26657", prometheus_urls: "tendermint=http://172.31.1.213:26660,node=http://172.31.1.213:9100/metrics" }, \
+{ id: "tik2", url: "http://tik2.sredev.co:26657", prometheus_urls: "tendermint=http://172.31.6.31:26660,node=http://172.31.6.31:9100/metrics" }, \
+{ id: "tik3", url: "http://tik3.sredev.co:26657", prometheus_urls: "tendermint=http://172.31.15.61:26660,node=http://172.31.15.61:9100/metrics" }]
 CLIENTS_TYPE?=tmrpc
 CLIENTS_SPAWN?=1000
 CLIENTS_SPAWN_RATE?=20.0
-CLIENTS_MAX_INTERACTIONS?=10000
+CLIENTS_MAX_INTERACTIONS?=100
 CLIENTS_MAX_TEST_TIME?=10m
 CLIENTS_REQUEST_WAIT_MIN?=1000ms
 CLIENTS_REQUEST_WAIT_MAX?=1000ms
@@ -42,7 +48,9 @@ execute:
 		-e "{\"debug_mode\": ${DEBUG_MODE}}" \
 		-e "{\"fetch_results_only\": ${FETCH_RESULTS_ONLY}}" \
 		-e "{\"loadtest_master_node\":\"${MASTER_NODE}\"}" \
+		-e "{\"loadtest_master_expect_slaves\":${EXPECT_SLAVES}}" \
 		-e "{\"binaries\": {\"tmloadtest\": \"${TMLOADTEST_BINARY}\"}}" \
+		-e '{"test_network_targets": ${TEST_NETWORK_TARGETS}}' \
 		-e $(CLIENTS_CONFIG) \
 		deploy.yml
 	

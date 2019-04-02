@@ -29,6 +29,11 @@ In order to execute the various deployments or scenarios, you will need:
 Target platform for execution of these deployments/scenarios is either
 Linux/macOS.
 
+## Load Testing Guide
+See the [Load Testing Guide](GUIDE.md) for a step-by-step guide to setting up
+and executing your own load tests against a Tendermint network using these
+scripts.
+
 ## Managing Python dependencies
 By default, the first time you execute a deployment or a scenario, a Python 3
 virtual environment will be created in the `testing/venv` folder in this repo. A

@@ -16,9 +16,9 @@
 
 /.vscode/
 /build/
-/remote/venv/
-/remote/experiments/**/*-clients-*/
-/remote/experiments/**/collection.log
+/scripts/load-testing/venv/
+/scripts/load-testing/experiments/**/*-clients-*/
+/scripts/load-testing/experiments/**/collection.log
 *.pyc
 __pycache__
 *.bak

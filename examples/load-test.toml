@@ -38,7 +38,13 @@ prometheus_poll_timeout = "1s"
     [[test_network.targets]]
     id = "host1"
     url = "http://192.168.2.1:26657"
-    prometheus_urls = "http://192.168.2.1:26660"
+
+    # A comma-separated list of Prometheus endpoints to poll on a regular basis.
+    # The format for a Prometheus endpoint is of the form:
+    # "endpointid1=http://host1,endpointid2=http://host2", where the output
+    # statistics will include the endpoint ID in the metric names to
+    # differentiate their sources.
+    prometheus_urls = "tendermint=http://192.168.2.1:26660"
 
     # If tm-outage-sim-server is running on this host, tm-load-test will
     # attempt to bring it down after 5 minutes, and then back up after 8
@@ -48,12 +54,12 @@ prometheus_poll_timeout = "1s"
     [[test_network.targets]]
     id = "host2"
     url = "http://192.168.2.2:26657"
-    prometheus_urls = "http://192.168.2.2:26660"
+    prometheus_urls = "tendermint=http://192.168.2.2:26660"
 
     [[test_network.targets]]
     id = "host3"
     url = "http://192.168.2.3:26657"
-    prometheus_urls = "http://192.168.2.3:26660"
+    prometheus_urls = "tendermint=http://192.168.2.3:26660"
 
 [clients]
 # What type of client to spawn. The `tmrpc` type uses the Tendermint client for
