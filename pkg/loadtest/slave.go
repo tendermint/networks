@@ -245,7 +245,7 @@ func (s *Slave) spawnClientStatsReceiver(clientParams ClientParams, expectedTota
 			}
 		}
 		// submit the overall stats for counting
-		finalStatsc <- overallStats
+		finalStatsc <- SummarizeCombinedStats(overallStats)
 	}()
 }
 

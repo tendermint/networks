@@ -228,7 +228,7 @@ func (c *TestNetworkTargetConfig) Validate(i int) error {
 // specified Prometheus endpoints. The right format for `prometheus_urls`
 // parameter resembles the following:
 // id1=http://server1,id2=http://server2
-func (c *TestNetworkTargetConfig) GetPrometheusEndpoints() []*PrometheusEndpoint {
+func (c TestNetworkTargetConfig) GetPrometheusEndpoints() []*PrometheusEndpoint {
 	idURLs := strings.Split(c.PrometheusURLs, ",")
 	endpoints := make([]*PrometheusEndpoint, 0)
 	for _, idURL := range idURLs {
