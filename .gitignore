@@ -17,6 +17,7 @@
 /.vscode/
 /build/
 /scripts/load-testing/venv/
+/scripts/load-testing/inventory/myhosts
 /scripts/load-testing/experiments/**/*-clients-*/
 /scripts/load-testing/experiments/**/collection.log
 *.pyc
