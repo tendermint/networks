@@ -1,17 +1,17 @@
 ---
 - name: Ensure service group exists
   group:
-    name: tendermint
+    name: "{{ tm_user }}"
     state: present
 - name: Ensure service user exists
   user:
-    name: tendermint
-    group: tendermint
+    name: "{{ tm_user }}"
+    group: "{{ tm_user }}"
     home: /home/tendermint
     state: present
-- name: Copy service definition to nodes
-  copy:
-    src: config/tendermint.service
+- name: Deploy service definition to nodes
+  template:
+    src: templates/tendermint.service.jinja2
     dest: /etc/systemd/system/tendermint.service
 - name: Reload systemd services
   systemd:

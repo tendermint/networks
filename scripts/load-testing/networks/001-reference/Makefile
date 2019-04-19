@@ -4,9 +4,11 @@ FAST_MODE?=false
 GOPATH?=$(shell go env GOPATH)
 WITH_CLEVELDB?=false
 INSTALL_TENDERMINT_LOCALLY?=false
-TENDERMINT_SRC=$(GOPATH)/src/github.com/tendermint/tendermint
-TM_NETWORKS_SRC=$(GOPATH)/src/github.com/tendermint/networks
-TM_OUTAGE_SIM_SERVER_BIN=$(TM_NETWORKS_SRC)/build/tm-outage-sim-server
+TENDERMINT_SRC?=$(GOPATH)/src/github.com/tendermint/tendermint
+TM_NETWORKS_SRC?=$(GOPATH)/src/github.com/tendermint/networks
+TM_OUTAGE_SIM_SERVER_BIN?=$(TM_NETWORKS_SRC)/build/tm-outage-sim-server
+TM_USER?=tendermint
+TM_ALWAYS_DEPLOY?=no
 NETWORK_CONFIG_SCRIPT?=./scripts/001-default.sh
 CONFIG_SCRIPT?=$(NETWORK_CONFIG_SCRIPT)
 NETWORK_VALIDATORS?=4
@@ -35,6 +37,8 @@ deploy:
 	ansible-playbook -i $(INVENTORY) \
 		-e "{\"fast_mode\":${FAST_MODE}}" \
 		-e "{\"with_cleveldb\":${WITH_CLEVELDB}}" \
+		-e "{\"tm_user\": \"${TM_USER}\"}" \
+		-e "{\"always_deploy_svc\": ${TM_ALWAYS_DEPLOY}}" \
 		-e "{\"tm_outage_sim_server_bin\":\"${TM_OUTAGE_SIM_SERVER_BIN}\"}" \
 		deploy.yml
 	@echo "Checking if Tendermint nodes are up..."
