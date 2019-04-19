@@ -8,6 +8,7 @@
     node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v0.17.0/node_exporter-0.17.0.linux-amd64.tar.gz"
     fast_mode: no
     with_cleveldb: no
+    tm_user: tendermint
   tasks:
     # If we need cleveldb support
     - name: Install cleveldb dependencies on target nodes, if necessary
@@ -74,8 +75,8 @@
     - name: Set Tendermint home permissions
       file:
         path: /home/tendermint/.tendermint
-        owner: tendermint
-        group: tendermint
+        owner: "{{ tm_user }}"
+        group: "{{ tm_user }}"
         recurse: yes
 
     # Start the Tendermint service

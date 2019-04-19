@@ -5,8 +5,8 @@ After=network-online.target
 
 [Service]
 Restart=on-failure
-User=tendermint
-Group=tendermint
+User={{ tm_user }}
+Group={{ tm_user }}
 PermissionsStartOnly=true
 ExecStart=/usr/bin/tendermint node
 KillSignal=SIGTERM
