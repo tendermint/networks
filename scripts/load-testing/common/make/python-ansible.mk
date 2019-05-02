@@ -10,7 +10,7 @@ venv/bin/ansible: venv
 	pip install -U -r requirements.txt; \
 	touch venv/bin/ansible
 
-update_deps: venv
+update-deps: venv
 	@echo "Updating Python dependencies..."; \
 	$(ACTIVATE_VENV); \
 	pip install -U -r requirements.txt; \
