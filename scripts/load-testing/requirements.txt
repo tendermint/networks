@@ -2,3 +2,4 @@ wheel
 ansible
 pip
 matplotlib
+requests
