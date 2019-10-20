@@ -23,6 +23,7 @@ type ClientParams struct {
 	RequestWaitMax     time.Duration // The maximum time to wait prior to executing a request.
 	RequestTimeout     time.Duration // The maximum time to allow for a request.
 	TotalClients       int64         // The total number of clients for which to initialize the load testing.
+	AdditionalParams   string        // The additional parameters provided through the load test configuration file.
 }
 
 // ClientFactory produces clients.

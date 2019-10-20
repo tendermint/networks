@@ -71,15 +71,16 @@ type TestNetworkTargetConfig struct {
 
 // ClientConfig contains the configuration for clients being spawned on slaves.
 type ClientConfig struct {
-	Type               string            `toml:"type"`                // The type of client to spawn.
-	Spawn              int               `toml:"spawn"`               // The number of clients to spawn, per slave.
-	SpawnRate          float64           `toml:"spawn_rate"`          // The rate at which to spawn clients, per second, on each slave.
-	MaxInteractions    int               `toml:"max_interactions"`    // The maximum number of interactions emanating from each client.
-	MaxTestTime        ParseableDuration `toml:"max_test_time"`       // The maximum duration of the test, beyond which this client must be stopped.
-	RequestWaitMin     ParseableDuration `toml:"request_wait_min"`    // The minimum wait period before each request before sending another one.
-	RequestWaitMax     ParseableDuration `toml:"request_wait_max"`    // The maximum wait period before each request before sending another one.
-	RequestTimeout     ParseableDuration `toml:"request_timeout"`     // The maximum time allowed before considering a request to have timed out.
-	InteractionTimeout ParseableDuration `toml:"interaction_timeout"` // The maximum time allowed for an overall interaction.
+	Type               string            `toml:"type"`                        // The type of client to spawn.
+	AdditionalParams   string            `toml:"additional_params,omitempty"` // Optional additional parameters (client type-specific).
+	Spawn              int               `toml:"spawn"`                       // The number of clients to spawn, per slave.
+	SpawnRate          float64           `toml:"spawn_rate"`                  // The rate at which to spawn clients, per second, on each slave.
+	MaxInteractions    int               `toml:"max_interactions"`            // The maximum number of interactions emanating from each client.
+	MaxTestTime        ParseableDuration `toml:"max_test_time"`               // The maximum duration of the test, beyond which this client must be stopped.
+	RequestWaitMin     ParseableDuration `toml:"request_wait_min"`            // The minimum wait period before each request before sending another one.
+	RequestWaitMax     ParseableDuration `toml:"request_wait_max"`            // The maximum wait period before each request before sending another one.
+	RequestTimeout     ParseableDuration `toml:"request_timeout"`             // The maximum time allowed before considering a request to have timed out.
+	InteractionTimeout ParseableDuration `toml:"interaction_timeout"`         // The maximum time allowed for an overall interaction.
 }
 
 // ParseableDuration represents a time.Duration that implements

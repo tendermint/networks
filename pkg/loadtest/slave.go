@@ -173,6 +173,7 @@ func (s *Slave) doLoadTest(ctx actor.Context, slavePID *actor.PID) {
 		RequestWaitMax:     time.Duration(s.cfg.Clients.RequestWaitMax),
 		RequestTimeout:     time.Duration(s.cfg.Clients.RequestTimeout),
 		TotalClients:       0, // we set this to 0 because we have 0 clients initially
+		AdditionalParams:   s.cfg.Clients.AdditionalParams,
 	}
 	wg := &sync.WaitGroup{}
 	s.logger.Info("Starting client spawning", "desiredCount", s.cfg.Clients.Spawn)
